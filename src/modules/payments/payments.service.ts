@@ -1,0 +1,592 @@
+import { Injectable, Logger, BadRequestException, InternalServerErrorException } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import Razorpay from 'razorpay';
+import * as crypto from 'crypto';
+import { PrismaService } from '../../database/prisma.service';
+import { AuditService } from '../audit/audit.service';
+import { EmailService } from '../email/email.service';
+import { CreateOrderDto, VerifyPaymentDto, PaymentWebhookDto } from './dto/payments.dto';
+import { PaymentStatus, SubscriptionType } from '@prisma/client';
+
+@Injectable()
+export class PaymentsService {
+  private readonly logger = new Logger(PaymentsService.name);
+  private readonly razorpay: Razorpay;
+  private readonly webhookSecret: string;
+
+  // Credit packages
+  private readonly creditPackages = {
+    [SubscriptionType.FREE]: { credits: 5, price: 0 },
+    [SubscriptionType.BASIC]: { credits: 100, price: 49900 }, // ₹499
+    [SubscriptionType.PREMIUM]: { credits: 500, price: 199900 }, // ₹1999
+    [SubscriptionType.ENTERPRISE]: { credits: 2000, price: 499900 }, // ₹4999
+  };
+
+  constructor(
+    private readonly prismaService: PrismaService,
+    private readonly configService: ConfigService,
+    private readonly auditService: AuditService,
+    private readonly emailService: EmailService,
+  ) {
+    const keyId = this.configService.get<string>('RAZORPAY_KEY_ID');
+    const keySecret = this.configService.get<string>('RAZORPAY_KEY_SECRET');
+    this.webhookSecret = this.configService.get<string>('RAZORPAY_WEBHOOK_SECRET');
+
+    if (!keyId || !keySecret) {
+      this.logger.warn('Razorpay credentials not configured');
+    } else {
+      this.razorpay = new Razorpay({
+        key_id: keyId,
+        key_secret: keySecret,
+      });
+    }
+  }
+
+  async createOrder(userId: string, createOrderDto: CreateOrderDto) {
+    try {
+      // Validate credit package or custom amount
+      let creditsToAward = 0;
+      let finalAmount = createOrderDto.amount;
+
+      if (createOrderDto.subscriptionType) {
+        const creditPackage = this.creditPackages[createOrderDto.subscriptionType];
+        if (!creditPackage) {
+          throw new BadRequestException('Invalid subscription type');
+        }
+        creditsToAward = creditPackage.credits;
+        finalAmount = creditPackage.price;
+      } else if (createOrderDto.credits) {
+        // Custom credit purchase: ₹5 per credit
+        creditsToAward = createOrderDto.credits;
+        finalAmount = createOrderDto.credits * 500; // ₹5 = 500 paise
+      }
+
+      // Create Razorpay order
+      const razorpayOrder = await this.razorpay.orders.create({
+        amount: finalAmount,
+        currency: createOrderDto.currency,
+        receipt: `order_${userId}_${Date.now()}`,
+        notes: {
+          userId,
+          subscriptionType: createOrderDto.subscriptionType,
+          credits: creditsToAward.toString(),
+        },
+      });
+
+      // Save payment record in database
+      const payment = await this.prismaService.payment.create({
+        data: {
+          userId,
+          razorpayOrderId: razorpayOrder.id,
+          amount: finalAmount / 100, // Convert paise to rupees for storage
+          currency: createOrderDto.currency,
+          status: PaymentStatus.PENDING,
+          description: createOrderDto.description || `Purchase ${creditsToAward} credits`,
+          creditsAwarded: creditsToAward,
+          metadata: {
+            subscriptionType: createOrderDto.subscriptionType,
+            razorpayOrderDetails: JSON.parse(JSON.stringify(razorpayOrder)),
+          } as any,
+        },
+      });
+
+      // Log audit event
+      await this.auditService.log({
+        userId,
+        action: 'payment.order_created',
+        entityType: 'Payment',
+        entityId: payment.id,
+        metadata: {
+          razorpayOrderId: razorpayOrder.id,
+          amount: finalAmount,
+          credits: creditsToAward,
+        },
+      });
+
+      this.logger.log(`Payment order created: ${payment.id} for user ${userId}`);
+
+      return {
+        id: payment.id,
+        razorpayOrderId: razorpayOrder.id,
+        amount: finalAmount,
+        currency: createOrderDto.currency,
+        creditsAwarded: creditsToAward,
+        key: this.configService.get<string>('RAZORPAY_KEY_ID'),
+      };
+    } catch (error) {
+      this.logger.error('Failed to create payment order:', error);
+      throw new InternalServerErrorException('Failed to create payment order');
+    }
+  }
+
+  async verifyPayment(userId: string, verifyPaymentDto: VerifyPaymentDto) {
+    try {
+      // Verify signature
+      const isValid = this.verifyRazorpaySignature(
+        verifyPaymentDto.razorpayOrderId,
+        verifyPaymentDto.razorpayPaymentId,
+        verifyPaymentDto.razorpaySignature,
+      );
+
+      if (!isValid) {
+        throw new BadRequestException('Invalid payment signature');
+      }
+
+      // Find payment record
+      const payment = await this.prismaService.payment.findFirst({
+        where: {
+          userId,
+          razorpayOrderId: verifyPaymentDto.razorpayOrderId,
+        },
+        include: { user: true },
+      });
+
+      if (!payment) {
+        throw new BadRequestException('Payment record not found');
+      }
+
+      if (payment.status === PaymentStatus.COMPLETED) {
+        throw new BadRequestException('Payment already processed');
+      }
+
+      // Fetch payment details from Razorpay
+      const razorpayPayment = await this.razorpay.payments.fetch(
+        verifyPaymentDto.razorpayPaymentId,
+      );
+
+      // Update payment status
+      const updatedPayment = await this.prismaService.payment.update({
+        where: { id: payment.id },
+        data: {
+          razorpayPaymentId: verifyPaymentDto.razorpayPaymentId,
+          razorpaySignature: verifyPaymentDto.razorpaySignature,
+          status: PaymentStatus.COMPLETED,
+          method: razorpayPayment.method,
+          metadata: {
+            ...(payment.metadata as any),
+            razorpayPaymentDetails: JSON.parse(JSON.stringify(razorpayPayment)),
+          } as any,
+        },
+      });
+
+      // Award credits to user
+      await this.prismaService.user.update({
+        where: { id: userId },
+        data: {
+          credits: {
+            increment: payment.creditsAwarded,
+          },
+        },
+      });
+
+      // Create subscription if applicable
+      const metadata = payment.metadata as any;
+      if (metadata?.subscriptionType) {
+        await this.createSubscription(userId, metadata.subscriptionType as SubscriptionType);
+      }
+
+      // Log audit event
+      await this.auditService.log({
+        userId,
+        action: 'payment.completed',
+        entityType: 'Payment',
+        entityId: payment.id,
+        metadata: {
+          razorpayPaymentId: verifyPaymentDto.razorpayPaymentId,
+          creditsAwarded: payment.creditsAwarded,
+          amount: payment.amount,
+        },
+      });
+
+      // Send confirmation email
+      await this.emailService.sendPaymentConfirmation(
+        payment.user.email,
+        {
+          paymentId: payment.id,
+          amount: Number(payment.amount),
+          credits: payment.creditsAwarded,
+          currency: payment.currency,
+        },
+      );
+
+      this.logger.log(`Payment completed: ${payment.id}, credits awarded: ${payment.creditsAwarded}`);
+
+      return {
+        success: true,
+        payment: updatedPayment,
+        creditsAwarded: payment.creditsAwarded,
+      };
+    } catch (error) {
+      this.logger.error('Payment verification failed:', error);
+      
+      // Log failed payment attempt
+      await this.auditService.log({
+        userId,
+        action: 'payment.verification_failed',
+        entityType: 'Payment',
+        metadata: {
+          razorpayOrderId: verifyPaymentDto.razorpayOrderId,
+          error: error.message,
+        },
+      });
+
+      throw error;
+    }
+  }
+
+  async storePaymentData(paymentData: {
+    razorpayPaymentId: string;
+    razorpayOrderId?: string;
+    razorpaySignature?: string;
+    amount: number;
+    currency: string;
+    status: string;
+    description: string;
+    creditsAwarded: number;
+    metadata: any;
+  }) {
+    try {
+      // Store payment data in database immediately
+      const payment = await this.prismaService.payment.create({
+        data: {
+          userId: 'anonymous-user', // Will be linked later when user logs in
+          razorpayPaymentId: paymentData.razorpayPaymentId,
+          razorpayOrderId: paymentData.razorpayOrderId,
+          razorpaySignature: paymentData.razorpaySignature,
+          amount: paymentData.amount,
+          currency: paymentData.currency,
+          status: paymentData.status as PaymentStatus,
+          description: paymentData.description,
+          creditsAwarded: paymentData.creditsAwarded,
+          metadata: paymentData.metadata as any,
+        },
+      });
+
+      this.logger.log(`💾 Payment data stored: ${payment.id} - ${paymentData.razorpayPaymentId}`);
+
+      return payment;
+    } catch (error) {
+      this.logger.error('❌ Failed to store payment data:', error);
+      throw error;
+    }
+  }
+
+  async storeAvatarGeneration(avatarData: {
+    sessionId: string;
+    userImage: string;
+    selectedWearables: any[];
+    selectedScenery: string;
+    userDetails: any;
+    generatedPrompt: string;
+    status: string;
+    metadata: any;
+  }) {
+    try {
+      // Store avatar generation data in database
+      const avatarGeneration = await this.prismaService.avatarGeneration.create({
+        data: {
+          sessionId: avatarData.sessionId,
+          userImage: avatarData.userImage,
+          selectedWearables: avatarData.selectedWearables,
+          selectedScenery: avatarData.selectedScenery,
+          userDetails: avatarData.userDetails,
+          generatedPrompt: avatarData.generatedPrompt,
+          status: avatarData.status,
+          metadata: avatarData.metadata as any,
+        },
+      });
+
+      this.logger.log(`💾 Avatar generation data stored: ${avatarGeneration.sessionId}`);
+      return avatarGeneration;
+    } catch (error) {
+      this.logger.error('❌ Failed to store avatar generation data:', error);
+      throw error;
+    }
+  }
+
+  async updateAvatarGenerationStatus(sessionId: string, status: string, paymentId?: string) {
+    try {
+      const updateData: any = {
+        status,
+        updatedAt: new Date(),
+      };
+
+      if (paymentId) {
+        updateData.paymentId = paymentId;
+      }
+
+      const updated = await this.prismaService.avatarGeneration.update({
+        where: { sessionId },
+        data: updateData,
+      });
+
+      this.logger.log(`✅ Avatar generation status updated: ${sessionId} -> ${status}`);
+      return updated;
+    } catch (error) {
+      this.logger.error('❌ Failed to update avatar generation status:', error);
+      throw error;
+    }
+  }
+
+  async getAvatarGenerationBySession(sessionId: string) {
+    try {
+      const avatarGeneration = await this.prismaService.avatarGeneration.findUnique({
+        where: { sessionId },
+      });
+
+      if (!avatarGeneration) {
+        throw new Error('Avatar generation session not found');
+      }
+
+      return avatarGeneration;
+    } catch (error) {
+      this.logger.error('❌ Failed to get avatar generation:', error);
+      throw error;
+    }
+  }
+
+  async handleWebhook(webhookData: PaymentWebhookDto, signature: string) {
+    try {
+      // Verify webhook signature
+      const isValid = this.verifyWebhookSignature(JSON.stringify(webhookData), signature);
+      
+      if (!isValid) {
+        throw new BadRequestException('Invalid webhook signature');
+      }
+
+      const { event, payload } = webhookData;
+
+      switch (event) {
+        case 'payment.captured':
+          await this.handlePaymentCaptured(payload.payment.entity);
+          break;
+        case 'payment.failed':
+          await this.handlePaymentFailed(payload.payment.entity);
+          break;
+        case 'order.paid':
+          await this.handleOrderPaid(payload.order.entity);
+          break;
+        default:
+          this.logger.warn(`Unhandled webhook event: ${event}`);
+      }
+
+      // Log webhook event
+      await this.auditService.log({
+        action: `webhook.${event}`,
+        entityType: 'Payment',
+        source: 'WEBHOOK',
+        metadata: {
+          event,
+          payload,
+        },
+      });
+
+      return { success: true };
+    } catch (error) {
+      this.logger.error('Webhook processing failed:', error);
+      throw error;
+    }
+  }
+
+  async getPaymentHistory(userId: string, page = 1, limit = 20) {
+    const skip = (page - 1) * limit;
+
+    const [payments, total] = await Promise.all([
+      this.prismaService.payment.findMany({
+        where: { userId },
+        orderBy: { createdAt: 'desc' },
+        skip,
+        take: limit,
+        select: {
+          id: true,
+          razorpayOrderId: true,
+          razorpayPaymentId: true,
+          amount: true,
+          currency: true,
+          status: true,
+          method: true,
+          description: true,
+          creditsAwarded: true,
+          createdAt: true,
+          updatedAt: true,
+        },
+      }),
+      this.prismaService.payment.count({
+        where: { userId },
+      }),
+    ]);
+
+    return {
+      payments,
+      pagination: {
+        total,
+        page,
+        limit,
+        totalPages: Math.ceil(total / limit),
+      },
+    };
+  }
+
+  async hasValidSubscription(userId: string): Promise<boolean> {
+    const user = await this.prismaService.user.findUnique({
+      where: { id: userId },
+      select: {
+        subscriptionType: true,
+        subscriptionEndsAt: true,
+        credits: true,
+      },
+    });
+
+    if (!user) return false;
+
+    // Check if user has credits
+    if (user.credits > 0) return true;
+
+    // Check if subscription is active
+    if (user.subscriptionType !== SubscriptionType.FREE) {
+      if (!user.subscriptionEndsAt || user.subscriptionEndsAt > new Date()) {
+        return true;
+      }
+    }
+
+    return false;
+  }
+
+  async deductCredits(userId: string, amount: number): Promise<boolean> {
+    try {
+      const user = await this.prismaService.user.findUnique({
+        where: { id: userId },
+        select: { credits: true },
+      });
+
+      if (!user || user.credits < amount) {
+        return false;
+      }
+
+      await this.prismaService.user.update({
+        where: { id: userId },
+        data: {
+          credits: {
+            decrement: amount,
+          },
+        },
+      });
+
+      // Log credit deduction
+      await this.auditService.log({
+        userId,
+        action: 'credits.deducted',
+        entityType: 'User',
+        entityId: userId,
+        metadata: {
+          creditsDeducted: amount,
+          remainingCredits: user.credits - amount,
+        },
+      });
+
+      return true;
+    } catch (error) {
+      this.logger.error('Failed to deduct credits:', error);
+      return false;
+    }
+  }
+
+  private verifyRazorpaySignature(orderId: string, paymentId: string, signature: string): boolean {
+    const body = orderId + '|' + paymentId;
+    const expectedSignature = crypto
+      .createHmac('sha256', this.configService.get<string>('RAZORPAY_KEY_SECRET'))
+      .update(body.toString())
+      .digest('hex');
+
+    return expectedSignature === signature;
+  }
+
+  private verifyWebhookSignature(body: string, signature: string): boolean {
+    const expectedSignature = crypto
+      .createHmac('sha256', this.webhookSecret)
+      .update(body)
+      .digest('hex');
+
+    return expectedSignature === signature;
+  }
+
+  private async handlePaymentCaptured(paymentData: any) {
+    const payment = await this.prismaService.payment.findFirst({
+      where: { razorpayPaymentId: paymentData.id },
+      include: { user: true },
+    });
+
+    if (payment && payment.status !== PaymentStatus.COMPLETED) {
+      await this.prismaService.payment.update({
+        where: { id: payment.id },
+        data: { status: PaymentStatus.COMPLETED },
+      });
+
+      // Send confirmation email
+      await this.emailService.sendPaymentConfirmation(
+        payment.user.email,
+        {
+          paymentId: payment.id,
+          amount: Number(payment.amount),
+          credits: payment.creditsAwarded,
+          currency: payment.currency,
+        },
+      );
+    }
+  }
+
+  private async handlePaymentFailed(paymentData: any) {
+    const payment = await this.prismaService.payment.findFirst({
+      where: { razorpayPaymentId: paymentData.id },
+      include: { user: true },
+    });
+
+    if (payment) {
+      await this.prismaService.payment.update({
+        where: { id: payment.id },
+        data: {
+          status: PaymentStatus.FAILED,
+          failureReason: paymentData.error_description,
+        },
+      });
+
+      // Send failure email
+      await this.emailService.sendPaymentFailed(
+        payment.user.email,
+        {
+          paymentId: payment.id,
+          amount: Number(payment.amount),
+          reason: paymentData.error_description,
+        },
+      );
+    }
+  }
+
+  private async handleOrderPaid(orderData: any) {
+    // Handle order paid event
+    this.logger.log(`Order paid: ${orderData.id}`);
+  }
+
+  private async createSubscription(userId: string, subscriptionType: SubscriptionType) {
+    const creditPackage = this.creditPackages[subscriptionType];
+    const endDate = new Date();
+    endDate.setMonth(endDate.getMonth() + 1); // 1 month subscription
+
+    await this.prismaService.subscription.create({
+      data: {
+        userId,
+        type: subscriptionType,
+        creditsIncluded: creditPackage.credits,
+        endDate,
+      },
+    });
+
+    await this.prismaService.user.update({
+      where: { id: userId },
+      data: {
+        subscriptionType,
+        subscriptionEndsAt: endDate,
+      },
+    });
+  }
+} 

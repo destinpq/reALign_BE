@@ -1,0 +1,224 @@
+# Dependencies
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# Compiled output
+/dist
+/build
+/out
+
+# Logs
+logs
+*.log
+npm-debug.log*
+pnpm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+lerna-debug.log*
+
+# OS
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Tests
+/coverage
+/.nyc_output
+test-results/
+playwright-report/
+
+# IDEs and editors
+/.idea
+.project
+.classpath
+.c9/
+*.launch
+.settings/
+*.sublime-workspace
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+
+# Environment variables
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+.env.example
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+prisma/dev.db
+prisma/test.db
+
+# Uploads and temporary files
+uploads/
+temp-uploads/
+tmp/
+temp/
+*.tmp
+*.temp
+
+# Generated files
+generated/
+*.generated.*
+
+# Cache
+.cache/
+.parcel-cache/
+.eslintcache
+
+# Runtime data
+pids
+*.pid
+*.seed
+*.pid.lock
+
+# Coverage directory used by tools like istanbul
+coverage/
+*.lcov
+
+# nyc test coverage
+.nyc_output
+
+# Dependency directories
+jspm_packages/
+
+# TypeScript cache
+*.tsbuildinfo
+
+# Optional npm cache directory
+.npm
+
+# Optional eslint cache
+.eslintcache
+
+# Microbundle cache
+.rpt2_cache/
+.rts2_cache_cjs/
+.rts2_cache_es/
+.rts2_cache_umd/
+
+# Optional REPL history
+.node_repl_history
+
+# Output of 'npm pack'
+*.tgz
+
+# Yarn Integrity file
+.yarn-integrity
+
+# parcel-bundler cache (https://parceljs.org/)
+.cache
+.parcel-cache
+
+# Serverless directories
+.serverless/
+
+# FuseBox cache
+.fusebox/
+
+# DynamoDB Local files
+.dynamodb/
+
+# TernJS port file
+.tern-port
+
+# Stores VSCode versions used for testing VSCode extensions
+.vscode-test
+
+# yarn v2
+.yarn/cache
+.yarn/unplugged
+.yarn/build-state.yml
+.yarn/install-state.gz
+.pnp.*
+
+# NestJS specific
+dist/
+build/
+
+# Prisma
+prisma/migrations/dev.db*
+prisma/migrations/test.db*
+
+# AWS
+.aws/
+
+# Docker
+.dockerignore
+docker-compose.override.yml
+
+# Backup files
+*.bak
+*.backup
+*~
+
+# Image files
+*.jpg
+*.jpeg
+*.png
+*.gif
+*.webp
+*.svg
+*.ico
+*.bmp
+*.tiff
+
+# Document files
+*.pdf
+*.doc
+*.docx
+
+# Archive files
+*.zip
+*.rar
+*.7z
+*.tar
+*.tar.gz
+*.tar.bz2
+
+# Lock files (keep package-lock.json but ignore others)
+yarn.lock
+pnpm-lock.yaml
+
+# Local development
+.vercel
+
+# Swagger generated files
+swagger-spec.json
+
+# PM2
+ecosystem.config.js
+.pm2/
+
+# Kubernetes
+*.yaml
+*.yml
+!docker-compose.yml
+!.github/**/*.yml
+!.github/**/*.yaml
+
+# Terraform
+*.tfstate
+*.tfstate.*
+.terraform/
+
+# Miscellaneous
+*.swp
+*.swo
+.vimrc
+.editorconfig 

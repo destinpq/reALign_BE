@@ -1,0 +1,964 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// User Management
+model User {
+  id                String   @id @default(cuid())
+  email             String   @unique
+  password          String
+  firstName         String?
+  lastName          String?
+  avatar            String?
+  isEmailVerified   Boolean  @default(false)
+  emailVerifiedAt   DateTime?
+  credits           Int      @default(0)
+  role              UserRole @default(USER)
+  subscriptionType  SubscriptionType @default(FREE)
+  subscriptionEndsAt DateTime?
+  isActive          Boolean  @default(true)
+  lastLoginAt       DateTime?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  // Relations
+  sessions              Session[]
+  subscriptions         Subscription[]
+  wearableSelections    UserWearableSelection[]
+  customizations        AvatarCustomization[]
+  photos                Photo[]
+  projects              Project[]
+  processingJobs        ProcessingJob[]
+  payments              Payment[]
+  auditLogs             AuditLog[]
+  emailNotifications    EmailNotification[]
+  webhookDeliveries     WebhookDelivery[]
+  transactions          Transaction[]
+  transactionSummaries  TransactionSummary[]
+
+  @@map("users")
+}
+
+enum UserRole {
+  USER
+  PREMIUM
+  ADMIN
+  SUPER_ADMIN
+}
+
+enum SubscriptionType {
+  FREE
+  BASIC
+  PREMIUM
+  ENTERPRISE
+}
+
+// Session Management
+model Session {
+  id           String   @id @default(cuid())
+  userId       String
+  refreshToken String   @unique
+  isValid      Boolean  @default(true)
+  expiresAt    DateTime
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("sessions")
+}
+
+// Subscription Management
+model Subscription {
+  id                String             @id @default(cuid())
+  userId            String
+  type              SubscriptionType
+  status            SubscriptionStatus @default(ACTIVE)
+  startDate         DateTime           @default(now())
+  endDate           DateTime?
+  autoRenew         Boolean            @default(true)
+  paymentMethod     String?
+  razorpaySubscriptionId String?        @unique
+  creditsIncluded   Int
+  creditsUsed       Int                @default(0)
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+
+  user         User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  payments     Payment[]
+  transactions Transaction[]
+
+  @@map("subscriptions")
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  CANCELLED
+  EXPIRED
+  SUSPENDED
+}
+
+// Payment Management
+model Payment {
+  id                    String        @id @default(cuid())
+  userId                String
+  subscriptionId        String?
+  razorpayPaymentId     String?       @unique
+  razorpayOrderId       String?       @unique
+  razorpaySignature     String?
+  amount                Decimal       @db.Decimal(10, 2)
+  currency              String        @default("INR")
+  status                PaymentStatus @default(PENDING)
+  method                String?
+  description           String?
+  failureReason         String?
+  creditsAwarded        Int           @default(0)
+  metadata              Json?
+  createdAt             DateTime      @default(now())
+  updatedAt             DateTime      @updatedAt
+
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  subscription Subscription? @relation(fields: [subscriptionId], references: [id])
+  auditLogs    AuditLog[]
+  transactions Transaction[]
+
+  @@map("payments")
+}
+
+enum PaymentStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+  REFUNDED
+  CANCELLED
+}
+
+// Avatar Generation Sessions
+model AvatarGeneration {
+  id                 String   @id @default(cuid())
+  sessionId          String   @unique // Unique session ID for retrieval
+  userImage          String   // Base64 encoded user image
+  selectedWearables  Json     // Array of selected wearable items
+  selectedScenery    String   // Selected scenery/background
+  userDetails        Json     // User details (gender, eye color, hair color, etc.)
+  generatedPrompt    String   // AI prompt for generation
+  status             String   @default("PENDING_PAYMENT") // PENDING_PAYMENT, PAID, GENERATING, COMPLETED, FAILED
+  paymentId          String?  // Link to payment ID when paid
+  generatedImageUrl  String?  // URL of generated avatar image
+  metadata           Json?    // Additional metadata
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  @@map("avatar_generations")
+}
+
+// Wearable Items (from CSV with Image Mapping)
+model WearableItem {
+  id          String   @id // Use CSV ID directly (e.g., "W00001")
+  name        String   // e.g., "Striped Polo Shirt"
+  category    String   // Category from CSV
+  subcategory String?  // Derived subcategory
+  description String?  // Generated description
+  imageUrl    String?  // Google Drive image URL
+  hasImage    Boolean  @default(false) // Whether item has associated image
+  tags        String[] // Array of tags for filtering
+  style       String?  // e.g., "Casual", "Formal", "Vintage"
+  color       String?  // Primary color
+  material    String?  // e.g., "Cotton", "Leather", "Silk"
+  season      String?  // e.g., "Summer", "Winter", "All Season"
+  occasion    String?  // e.g., "Casual", "Formal", "Party"
+  size        String   @default("ONE_SIZE")
+  fit         String   @default("REGULAR")
+  isActive    Boolean  @default(true)
+  sortOrder   Int      @default(0)
+  
+  // Image mapping metadata
+  imageMapping Json? // Stores mapping details: fileName, confidence, mappingType
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  userSelections UserWearableSelection[]
+
+  @@map("wearable_items")
+}
+
+// User's Selected Wearable Items
+model UserWearableSelection {
+  id             String   @id @default(cuid())
+  userId         String
+  wearableItemId String
+  selectedAt     DateTime @default(now())
+
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  wearableItem WearableItem @relation(fields: [wearableItemId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, wearableItemId])
+  @@map("user_wearable_selections")
+}
+
+// Avatar Customizations
+model AvatarCustomization {
+  id               String                @id @default(cuid())
+  userId           String
+  name             String
+  primaryColor     String?
+  secondaryColor   String?
+  colorName        String?
+  size             Size?
+  fit              Fit?
+  customAttributes Json?
+  status           CustomizationStatus   @default(DRAFT)
+  processingJobId  String?               @unique
+  createdAt        DateTime              @default(now())
+  updatedAt        DateTime              @updatedAt
+
+  user          User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  processingJob ProcessingJob? @relation(fields: [processingJobId], references: [id])
+
+  @@map("avatar_customizations")
+}
+
+enum Size {
+  XS
+  S
+  M
+  L
+  XL
+  XXL
+}
+
+enum Fit {
+  SLIM
+  REGULAR
+  LOOSE
+}
+
+enum CustomizationStatus {
+  DRAFT
+  PROCESSING
+  COMPLETED
+  FAILED
+}
+
+// Photo Storage
+model Photo {
+  id               String   @id @default(cuid())
+  userId           String
+  filename         String
+  originalFilename String
+  s3Key            String   @unique
+  s3Bucket         String
+  mimeType         String
+  size             Int
+  title            String?
+  description      String?
+  imageBlob        Bytes?   // Store image data as binary blob in PostgreSQL
+  isGenerated      Boolean  @default(false)
+  generatedFrom    String?  // Source photo ID for generated images
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("photos")
+}
+
+// Project Organization
+model Project {
+  id          String   @id @default(cuid())
+  userId      String
+  name        String
+  description String?
+  isPublic    Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("projects")
+}
+
+// Processing Jobs (Magic Hour, etc.)
+model ProcessingJob {
+  id              String           @id @default(cuid())
+  userId          String
+  type            ProcessingType
+  status          ProcessingStatus @default(PENDING)
+  externalId      String?          @unique // Magic Hour job ID
+  inputData       Json?
+  outputData      Json?
+  creditsUsed     Int              @default(0)
+  errorMessage    String?
+  startedAt       DateTime?
+  completedAt     DateTime?
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+
+  user               User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  avatarCustomization AvatarCustomization?
+  auditLogs          AuditLog[]
+
+  @@map("processing_jobs")
+}
+
+enum ProcessingType {
+  HEADSHOT_GENERATION
+  AVATAR_GENERATION
+  AVATAR_CUSTOMIZATION
+  BACKGROUND_REMOVAL
+  IMAGE_ENHANCEMENT
+}
+
+enum ProcessingStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+  CANCELLED
+}
+
+// Audit Logging
+model AuditLog {
+  id              String      @id @default(cuid())
+  userId          String?
+  action          String      // e.g., "user.login", "payment.created", "headshot.generated"
+  entityType      String?     // e.g., "User", "Payment", "ProcessingJob"
+  entityId        String?
+  oldValues       Json?
+  newValues       Json?
+  metadata        Json?
+  ipAddress       String?
+  userAgent       String?
+  source          AuditSource @default(API)
+  createdAt       DateTime    @default(now())
+
+  user          User?          @relation(fields: [userId], references: [id], onDelete: SetNull)
+  payment       Payment?       @relation(fields: [entityId], references: [id], map: "audit_logs_payment_fkey")
+  processingJob ProcessingJob? @relation(fields: [entityId], references: [id], map: "audit_logs_processing_job_fkey")
+  transaction   Transaction?   @relation(fields: [entityId], references: [id], map: "audit_logs_transaction_fkey")
+
+  @@map("audit_logs")
+}
+
+enum AuditSource {
+  API
+  WEBHOOK
+  ADMIN_PANEL
+  SYSTEM
+  CRON_JOB
+}
+
+// Email Notifications
+model EmailNotification {
+  id          String              @id @default(cuid())
+  userId      String?
+  to          String
+  from        String
+  subject     String
+  template    String
+  templateData Json?
+  status      EmailStatus         @default(PENDING)
+  sentAt      DateTime?
+  failureReason String?
+  attempts    Int                 @default(0)
+  maxAttempts Int                 @default(3)
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
+
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@map("email_notifications")
+}
+
+enum EmailStatus {
+  PENDING
+  SENDING
+  SENT
+  FAILED
+  CANCELLED
+}
+
+// Webhook Management
+model WebhookEndpoint {
+  id          String            @id @default(cuid())
+  url         String
+  secret      String
+  events      String[]          // JSON array of event types
+  isActive    Boolean           @default(true)
+  description String?
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+
+  deliveries WebhookDelivery[]
+
+  @@map("webhook_endpoints")
+}
+
+model WebhookDelivery {
+  id               String         @id @default(cuid())
+  userId           String?
+  webhookEndpointId String
+  eventType        String
+  payload          Json
+  status           WebhookStatus  @default(PENDING)
+  httpStatus       Int?
+  response         String?
+  attempts         Int            @default(0)
+  maxAttempts      Int            @default(3)
+  nextRetryAt      DateTime?
+  deliveredAt      DateTime?
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+
+  user            User?           @relation(fields: [userId], references: [id], onDelete: SetNull)
+  webhookEndpoint WebhookEndpoint @relation(fields: [webhookEndpointId], references: [id], onDelete: Cascade)
+
+  @@map("webhook_deliveries")
+}
+
+enum WebhookStatus {
+  PENDING
+  DELIVERED
+  FAILED
+  CANCELLED
+}
+
+// ========================================
+// COMPREHENSIVE TRANSACTION TRACKING SYSTEM
+// ========================================
+
+// Main Transaction Table - EXTENSIVE TRACKING!
+model Transaction {
+  id              String             @id @default(cuid())
+  
+  // Basic Transaction Info
+  transactionId   String             @unique // External transaction ID (Razorpay, etc.)
+  type            TransactionType
+  status          TransactionStatus  @default(PENDING)
+  amount          Float              // Amount in currency
+  currency        String             @default("INR")
+  
+  // User & Entity Relations
+  userId          String?
+  entityType      String?            // "Payment", "Credit", "Refund", "Subscription", etc.
+  entityId        String?            // Related entity ID
+  
+  // Payment Gateway Details
+  paymentGateway  String?            // "RAZORPAY", "STRIPE", "PAYPAL", etc.
+  gatewayOrderId  String?            // Gateway order ID
+  gatewayPaymentId String?           // Gateway payment ID
+  gatewaySignature String?           // Gateway signature for verification
+  gatewayResponse Json?              // Full gateway response
+  
+  // Transaction Details
+  description     String?
+  notes           Json?              // Additional transaction notes
+  metadata        Json?              // Gateway-specific metadata
+  internalNotes   String?            // Internal admin notes
+  
+  // Credit System Tracking
+  creditsAwarded  Int?               @default(0)
+  creditsUsed     Int?               @default(0)
+  creditBalance   Int?               // User's credit balance after transaction
+  creditPackage   String?            // Credit package name
+  
+  // Comprehensive Fee Tracking
+  platformFee     Float?             @default(0)
+  gatewayFee      Float?             @default(0)
+  taxes           Float?             @default(0)
+  gst             Float?             @default(0)
+  serviceTax      Float?             @default(0)
+  processingFee   Float?             @default(0)
+  netAmount       Float?             // Amount after deducting all fees
+  
+  // Refund Information
+  refundAmount    Float?             @default(0)
+  refundReason    String?
+  refundedAt      DateTime?
+  refundedBy      String?            // Admin who processed refund
+  parentTransactionId String?        // For refund transactions
+  isRefundable    Boolean            @default(true)
+  
+  // Subscription Related
+  subscriptionId  String?
+  subscriptionPeriod String?         // "MONTHLY", "YEARLY", etc.
+  subscriptionCycle Int?             // Billing cycle number
+  
+  // Comprehensive Tracking & Analytics
+  source          String?            // "WEB", "MOBILE", "API", "ADMIN", "WEBHOOK"
+  channel         String?            // "DIRECT", "AFFILIATE", "REFERRAL"
+  campaign        String?            // Marketing campaign
+  medium          String?            // Marketing medium
+  referrer        String?            // Referrer URL
+  utmSource       String?            // UTM source
+  utmMedium       String?            // UTM medium
+  utmCampaign     String?            // UTM campaign
+  utmTerm         String?            // UTM term
+  utmContent      String?            // UTM content
+  
+  // Device & Location Tracking
+  userAgent       String?            // User's browser/device
+  ipAddress       String?            // User's IP address
+  deviceType      String?            // "DESKTOP", "MOBILE", "TABLET"
+  browser         String?            // Browser name
+  os              String?            // Operating system
+  location        Json?              // GeoIP location data
+  country         String?            // Country code
+  state           String?            // State/Province
+  city            String?            // City
+  
+  // Processing Information
+  processedAt     DateTime?          // When transaction was processed
+  authorizedAt    DateTime?          // When transaction was authorized
+  capturedAt      DateTime?          // When payment was captured
+  settledAt       DateTime?          // When funds were settled
+  failureReason   String?            // Reason for failure
+  errorCode       String?            // Error code from gateway
+  retryCount      Int                @default(0)
+  maxRetries      Int                @default(3)
+  nextRetryAt     DateTime?          // Next retry timestamp
+  
+  // Risk & Fraud Detection
+  riskScore       Float?             // Risk assessment score (0-100)
+  fraudFlags      String[]           // Array of fraud flags
+  isHighRisk      Boolean            @default(false)
+  reviewStatus    String?            // "PENDING", "APPROVED", "REJECTED"
+  reviewedBy      String?            // Admin who reviewed
+  reviewedAt      DateTime?          // Review timestamp
+  reviewNotes     String?            // Review notes
+  
+  // Customer Service
+  supportTicketId String?            // Related support ticket
+  customerNotes   String?            // Customer-provided notes
+  disputeId       String?            // Dispute/chargeback ID
+  disputeReason   String?            // Dispute reason
+  disputeStatus   String?            // Dispute status
+  
+  // Timestamps - DETAILED TRACKING
+  initiatedAt     DateTime           @default(now())
+  submittedAt     DateTime?          // When user submitted
+  queuedAt        DateTime?          // When queued for processing
+  startedAt       DateTime?          // When processing started
+  completedAt     DateTime?          // When fully completed
+  expiredAt       DateTime?          // When transaction expires
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+  
+  // Relations
+  user            User?              @relation(fields: [userId], references: [id], onDelete: SetNull)
+  payment         Payment?           @relation(fields: [entityId], references: [id], map: "transaction_payment_fkey")
+  subscription    Subscription?      @relation(fields: [subscriptionId], references: [id], onDelete: SetNull)
+  parentTransaction Transaction?     @relation("TransactionRefund", fields: [parentTransactionId], references: [id])
+  childTransactions Transaction[]    @relation("TransactionRefund")
+  
+  // Related Events & Logs
+  events          TransactionEvent[]
+  auditLogs       AuditLog[]
+  
+  @@map("transactions")
+  
+  // Comprehensive Indexing for Performance
+  @@index([userId])
+  @@index([transactionId])
+  @@index([type])
+  @@index([status])
+  @@index([paymentGateway])
+  @@index([createdAt])
+  @@index([processedAt])
+  @@index([amount])
+  @@index([currency])
+  @@index([source])
+  @@index([country])
+  @@index([riskScore])
+  @@index([isHighRisk])
+  @@index([subscriptionId])
+  @@index([parentTransactionId])
+}
+
+enum TransactionType {
+  // Payment Types
+  PAYMENT                    // Regular payment
+  REFUND                     // Refund transaction
+  PARTIAL_REFUND            // Partial refund
+  
+  // Credit System
+  CREDIT_PURCHASE           // Credit package purchase
+  CREDIT_USAGE              // Credit consumption for services
+  CREDIT_REFUND             // Credit refund
+  CREDIT_TRANSFER           // Credit transfer between users
+  CREDIT_EXPIRY             // Credit expiry adjustment
+  BONUS_CREDIT              // Bonus credit award
+  REFERRAL_BONUS            // Referral bonus credit
+  PROMOTIONAL_CREDIT        // Promotional credit
+  ADMIN_CREDIT_ADJUSTMENT   // Admin credit adjustment
+  
+  // Subscription Types
+  SUBSCRIPTION              // New subscription payment
+  SUBSCRIPTION_RENEWAL      // Subscription renewal
+  SUBSCRIPTION_UPGRADE      // Subscription upgrade
+  SUBSCRIPTION_DOWNGRADE    // Subscription downgrade
+  SUBSCRIPTION_REFUND       // Subscription refund
+  SUBSCRIPTION_PRORATION    // Proration adjustment
+  
+  // Service Types
+  HEADSHOT_GENERATION       // AI headshot generation payment
+  AVATAR_CUSTOMIZATION      // Avatar customization payment
+  PREMIUM_FEATURE          // Premium feature access
+  BULK_PROCESSING          // Bulk processing payment
+  
+  // Fee Types
+  PLATFORM_FEE             // Platform fee collection
+  GATEWAY_FEE              // Gateway fee tracking
+  SERVICE_FEE              // Service fee
+  PROCESSING_FEE           // Processing fee
+  
+  // Adjustment Types
+  ADJUSTMENT               // Manual adjustment
+  CORRECTION               // Error correction
+  RECONCILIATION           // Reconciliation adjustment
+  
+  // Dispute Types
+  CHARGEBACK               // Chargeback transaction
+  DISPUTE                  // Dispute transaction
+  DISPUTE_RESOLUTION       // Dispute resolution
+  
+  // Settlement Types
+  SETTLEMENT               // Settlement transaction
+  PAYOUT                   // Payout to user/affiliate
+  WITHDRAWAL               // Withdrawal request
+  TRANSFER                 // Transfer between accounts
+  
+  // Special Types
+  GIFT_CARD                // Gift card purchase/redemption
+  VOUCHER                  // Voucher redemption
+  CASHBACK                 // Cashback credit
+  LOYALTY_POINTS           // Loyalty points conversion
+  AFFILIATE_COMMISSION     // Affiliate commission
+}
+
+enum TransactionStatus {
+  // Initial States
+  PENDING                  // Transaction initiated
+  SUBMITTED                // Submitted by user
+  QUEUED                   // Queued for processing
+  PROCESSING               // Being processed
+  
+  // Authorization States
+  AUTHORIZING              // Authorization in progress
+  AUTHORIZED               // Authorized but not captured
+  AUTHORIZATION_FAILED     // Authorization failed
+  
+  // Capture States
+  CAPTURING                // Capture in progress
+  CAPTURED                 // Payment captured
+  CAPTURE_FAILED           // Capture failed
+  
+  // Success States
+  COMPLETED                // Successfully completed
+  SETTLED                  // Funds settled
+  CONFIRMED                // Confirmed by all parties
+  
+  // Failure States
+  FAILED                   // Failed transaction
+  DECLINED                 // Declined by gateway/bank
+  CANCELLED                // Cancelled by user
+  EXPIRED                  // Transaction expired
+  TIMEOUT                  // Transaction timeout
+  REJECTED                 // Rejected by system
+  ABANDONED                // Abandoned by user
+  
+  // Refund States
+  REFUNDED                 // Fully refunded
+  PARTIALLY_REFUNDED       // Partially refunded
+  REFUND_PENDING           // Refund in progress
+  REFUND_FAILED            // Refund failed
+  
+  // Dispute States
+  DISPUTED                 // Under dispute
+  CHARGEBACK               // Chargeback initiated
+  CHARGEBACK_RESOLVED      // Chargeback resolved
+  
+  // Review States
+  UNDER_REVIEW             // Under manual review
+  FLAGGED                  // Flagged for review
+  APPROVED                 // Approved after review
+  BLOCKED                  // Blocked transaction
+  
+  // Settlement States
+  PENDING_SETTLEMENT       // Waiting for settlement
+  SETTLEMENT_FAILED        // Settlement failed
+  
+  // Retry States
+  RETRY                    // Retry in progress
+  RETRY_FAILED             // All retries failed
+  
+  // Special States
+  ON_HOLD                  // Transaction on hold
+  SUSPENDED                // Suspended transaction
+  ARCHIVED                 // Archived transaction
+}
+
+// Transaction Events for detailed activity tracking
+model TransactionEvent {
+  id            String                   @id @default(cuid())
+  transactionId String
+  eventType     TransactionEventType
+  status        String                   // Event status
+  message       String?                  // Event message
+  data          Json?                    // Event data
+  source        String?                  // Event source
+  triggeredBy   String?                  // User/system that triggered event
+  ipAddress     String?                  // IP address of trigger
+  userAgent     String?                  // User agent
+  duration      Int?                     // Event duration in milliseconds
+  createdAt     DateTime                 @default(now())
+  
+  transaction   Transaction              @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+  
+  @@map("transaction_events")
+  @@index([transactionId])
+  @@index([eventType])
+  @@index([createdAt])
+  @@index([status])
+}
+
+enum TransactionEventType {
+  // Lifecycle Events
+  INITIATED
+  SUBMITTED
+  QUEUED
+  STARTED
+  AUTHORIZED
+  CAPTURED
+  COMPLETED
+  FAILED
+  CANCELLED
+  EXPIRED
+  
+  // Processing Events
+  VALIDATION_STARTED
+  VALIDATION_PASSED
+  VALIDATION_FAILED
+  FRAUD_CHECK_STARTED
+  FRAUD_CHECK_PASSED
+  FRAUD_CHECK_FAILED
+  PAYMENT_PROCESSING
+  GATEWAY_REQUEST_SENT
+  GATEWAY_RESPONSE_RECEIVED
+  
+  // Status Changes
+  STATUS_UPDATED
+  AMOUNT_UPDATED
+  METADATA_UPDATED
+  
+  // Refund Events
+  REFUND_INITIATED
+  REFUND_PROCESSED
+  REFUND_COMPLETED
+  REFUND_FAILED
+  
+  // Dispute Events
+  DISPUTE_CREATED
+  DISPUTE_UPDATED
+  CHARGEBACK_RECEIVED
+  DISPUTE_RESOLVED
+  
+  // Settlement Events
+  SETTLEMENT_INITIATED
+  SETTLEMENT_COMPLETED
+  SETTLEMENT_FAILED
+  PAYOUT_PROCESSED
+  
+  // Communication Events
+  WEBHOOK_SENT
+  WEBHOOK_RECEIVED
+  NOTIFICATION_SENT
+  EMAIL_SENT
+  SMS_SENT
+  
+  // Retry Events
+  RETRY_ATTEMPTED
+  RETRY_SCHEDULED
+  RETRY_FAILED
+  MAX_RETRIES_REACHED
+  
+  // Admin Events
+  ADMIN_REVIEW_STARTED
+  ADMIN_APPROVED
+  ADMIN_REJECTED
+  ADMIN_NOTE_ADDED
+  MANUAL_INTERVENTION
+  
+  // System Events
+  SYSTEM_ERROR
+  TIMEOUT_OCCURRED
+  CONNECTION_FAILED
+  RATE_LIMIT_HIT
+  
+  // User Events
+  USER_ACTION
+  USER_CANCELLED
+  USER_ABANDONED
+  
+  // Integration Events
+  THIRD_PARTY_CALLBACK
+  API_REQUEST
+  API_RESPONSE
+  
+  // Audit Events
+  DATA_EXPORTED
+  REPORT_GENERATED
+  COMPLIANCE_CHECK
+}
+
+// Comprehensive Transaction Analytics
+model TransactionAnalytics {
+  id                    String   @id @default(cuid())
+  date                  DateTime @unique // Date for analytics (YYYY-MM-DD)
+  hour                  Int?     // Hour (0-23) for hourly analytics
+  
+  // Volume Metrics
+  totalTransactions     Int      @default(0)
+  successfulTransactions Int     @default(0)
+  failedTransactions    Int      @default(0)
+  pendingTransactions   Int      @default(0)
+  cancelledTransactions Int      @default(0)
+  refundedTransactions  Int      @default(0)
+  disputedTransactions  Int      @default(0)
+  
+  // Amount Metrics (in INR)
+  totalAmount           Float    @default(0)
+  successfulAmount      Float    @default(0)
+  failedAmount          Float    @default(0)
+  refundedAmount        Float    @default(0)
+  disputedAmount        Float    @default(0)
+  netAmount             Float    @default(0)
+  
+  // Gateway Metrics
+  razorpayTransactions  Int      @default(0)
+  razorpayAmount        Float    @default(0)
+  razorpayFees          Float    @default(0)
+  stripeTransactions    Int      @default(0)
+  stripeAmount          Float    @default(0)
+  stripeFees            Float    @default(0)
+  
+  // Fee Breakdown
+  totalGatewayFees      Float    @default(0)
+  totalPlatformFees     Float    @default(0)
+  totalTaxes            Float    @default(0)
+  totalProcessingFees   Float    @default(0)
+  
+  // Credit System Metrics
+  creditsAwarded        Int      @default(0)
+  creditsUsed           Int      @default(0)
+  creditTransactions    Int      @default(0)
+  creditRefunds         Int      @default(0)
+  bonusCreditsAwarded   Int      @default(0)
+  
+  // Subscription Metrics
+  subscriptionPayments  Int      @default(0)
+  subscriptionAmount    Float    @default(0)
+  newSubscriptions      Int      @default(0)
+  renewalSubscriptions  Int      @default(0)
+  upgrades              Int      @default(0)
+  downgrades            Int      @default(0)
+  cancellations         Int      @default(0)
+  
+  // User Metrics
+  uniqueUsers           Int      @default(0)
+  newUsers              Int      @default(0)
+  returningUsers        Int      @default(0)
+  highValueUsers        Int      @default(0) // Users with >1000 INR transactions
+  
+  // Geographic Metrics
+  domesticTransactions  Int      @default(0)
+  internationalTransactions Int  @default(0)
+  topCountries          Json?    // Top 10 countries by transaction volume
+  topStates             Json?    // Top 10 states by transaction volume
+  
+  // Performance Metrics
+  averageTransactionTime Float?  // Average processing time in seconds
+  successRate           Float?   // Success rate percentage
+  failureRate           Float?   // Failure rate percentage
+  averageTransactionValue Float? // Average transaction value
+  
+  // Risk Metrics
+  highRiskTransactions  Int      @default(0)
+  fraudAttempts         Int      @default(0)
+  blockedTransactions   Int      @default(0)
+  reviewedTransactions  Int      @default(0)
+  
+  // Channel Metrics
+  webTransactions       Int      @default(0)
+  mobileTransactions    Int      @default(0)
+  apiTransactions       Int      @default(0)
+  adminTransactions     Int      @default(0)
+  
+  // Device Metrics
+  desktopTransactions   Int      @default(0)
+  mobileDeviceTransactions Int   @default(0)
+  tabletTransactions    Int      @default(0)
+  
+  // Time-based Metrics
+  peakHour              Int?     // Hour with most transactions
+  peakHourVolume        Int?     // Transaction count in peak hour
+  offPeakVolume         Int?     // Transaction count in off-peak hours
+  
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+  
+  @@map("transaction_analytics")
+  @@index([date])
+  @@index([hour])
+}
+
+// Transaction Summary for quick reporting
+model TransactionSummary {
+  id                String   @id @default(cuid())
+  userId            String?  // Null for system-wide summary
+  period            String   // "DAILY", "WEEKLY", "MONTHLY", "YEARLY"
+  startDate         DateTime
+  endDate           DateTime
+  
+  // Summary Metrics
+  totalTransactions Int      @default(0)
+  totalAmount       Float    @default(0)
+  totalFees         Float    @default(0)
+  netAmount         Float    @default(0)
+  successRate       Float    @default(0)
+  
+  // Breakdown by Type
+  paymentCount      Int      @default(0)
+  paymentAmount     Float    @default(0)
+  refundCount       Int      @default(0)
+  refundAmount      Float    @default(0)
+  creditCount       Int      @default(0)
+  creditAmount      Float    @default(0)
+  
+  // Additional Metrics
+  averageTransactionValue Float @default(0)
+  largestTransaction Float    @default(0)
+  smallestTransaction Float   @default(0)
+  
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  
+  user              User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@map("transaction_summaries")
+  @@index([userId])
+  @@index([period])
+  @@index([startDate])
+  @@index([endDate])
+} 

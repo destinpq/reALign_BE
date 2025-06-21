@@ -1,0 +1,48 @@
+{
+  "compilerOptions": {
+    "module": "commonjs",
+    "declaration": true,
+    "removeComments": true,
+    "emitDecoratorMetadata": true,
+    "experimentalDecorators": true,
+    "allowSyntheticDefaultImports": true,
+    "target": "ES2020",
+    "sourceMap": true,
+    "outDir": "./dist",
+    "baseUrl": "./",
+    "incremental": true,
+    "skipLibCheck": true,
+    "strictNullChecks": false,
+    "noImplicitAny": false,
+    "strictBindCallApply": false,
+    "forceConsistentCasingInFileNames": false,
+    "noFallthroughCasesInSwitch": false,
+    "resolveJsonModule": true,
+    "esModuleInterop": true,
+    "paths": {
+      "@/*": ["src/*"],
+      "@/modules/*": ["src/modules/*"],
+      "@/common/*": ["src/common/*"],
+      "@/config/*": ["src/config/*"],
+      "@/database/*": ["src/database/*"],
+      "@/guards/*": ["src/guards/*"],
+      "@/interceptors/*": ["src/interceptors/*"],
+      "@/decorators/*": ["src/decorators/*"],
+      "@/middleware/*": ["src/middleware/*"],
+      "@/dto/*": ["src/dto/*"],
+      "@/entities/*": ["src/entities/*"],
+      "@/services/*": ["src/services/*"],
+      "@/utils/*": ["src/utils/*"],
+      "@/shared/*": ["../shared/*"]
+    }
+  },
+  "include": [
+    "src/**/*",
+    "test/**/*"
+  ],
+  "exclude": [
+    "node_modules",
+    "dist",
+    "coverage"
+  ]
+} 

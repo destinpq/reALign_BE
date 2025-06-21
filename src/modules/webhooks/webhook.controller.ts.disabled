@@ -1,0 +1,480 @@
+import {
+  Controller,
+  Post,
+  Body,
+  Headers,
+  HttpStatus,
+  HttpException,
+  Logger,
+  Req,
+  Res,
+} from '@nestjs/common';
+import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
+import { Request, Response } from 'express';
+import { WebhookService } from './webhook.service';
+import { MagicHourService } from '../magic-hour/magic-hour.service';
+import { PaymentsService } from '../payments/payments.service';
+import { TransactionService } from '../transactions/transaction.service';
+import { AuditService } from '../audit/audit.service';
+
+@ApiTags('Webhooks')
+@Controller('webhooks')
+export class WebhookController {
+  private readonly logger = new Logger(WebhookController.name);
+
+  constructor(
+    private readonly webhookService: WebhookService,
+    private readonly magicHourService: MagicHourService,
+    private readonly paymentsService: PaymentsService,
+    private readonly transactionService: TransactionService,
+    private readonly auditService: AuditService,
+  ) {}
+
+  // ========================================
+  // MAGIC HOUR AI WEBHOOKS
+  // ========================================
+
+  @Post('magic-hour')
+  @ApiOperation({ summary: 'Handle Magic Hour AI webhooks' })
+  @ApiResponse({ status: 200, description: 'Webhook processed successfully' })
+  async handleMagicHourWebhook(
+    @Body() payload: any,
+    @Headers() headers: any,
+    @Req() req: Request,
+    @Res() res: Response,
+  ) {
+    try {
+      this.logger.log('Received Magic Hour webhook', { 
+        eventType: payload.event_type,
+        jobId: payload.job_id 
+      });
+
+      // Verify webhook signature if needed
+      const isValid = await this.webhookService.verifyMagicHourSignature(
+        JSON.stringify(payload),
+        headers['x-magichour-signature'] || headers['signature'],
+      );
+
+      if (!isValid) {
+        this.logger.error('Invalid Magic Hour webhook signature');
+        throw new HttpException('Invalid signature', HttpStatus.UNAUTHORIZED);
+      }
+
+      // Process the webhook based on event type
+      await this.processMagicHourWebhook(payload, req);
+
+      // Log webhook delivery
+      await this.webhookService.logWebhookDelivery({
+        source: 'MAGIC_HOUR',
+        eventType: payload.event_type,
+        payload,
+        status: 'SUCCESS',
+        ipAddress: req.ip,
+        userAgent: req.get('User-Agent'),
+      });
+
+      res.status(HttpStatus.OK).json({ 
+        success: true, 
+        message: 'Webhook processed successfully' 
+      });
+
+    } catch (error) {
+      this.logger.error('Failed to process Magic Hour webhook', error);
+
+      // Log failed webhook delivery
+      await this.webhookService.logWebhookDelivery({
+        source: 'MAGIC_HOUR',
+        eventType: payload?.event_type || 'unknown',
+        payload,
+        status: 'FAILED',
+        error: error.message,
+        ipAddress: req.ip,
+        userAgent: req.get('User-Agent'),
+      });
+
+      res.status(HttpStatus.INTERNAL_SERVER_ERROR).json({
+        success: false,
+        error: error.message,
+      });
+    }
+  }
+
+  private async processMagicHourWebhook(payload: any, req: Request): Promise<void> {
+    const { event_type, job_id, status, result, error } = payload;
+
+    switch (event_type) {
+      case 'job.started':
+        await this.handleMagicHourJobStarted(job_id, payload);
+        break;
+      case 'job.completed':
+        await this.handleMagicHourJobCompleted(job_id, result, payload);
+        break;
+      case 'job.failed':
+        await this.handleMagicHourJobFailed(job_id, error, payload);
+        break;
+      case 'job.progress':
+        await this.handleMagicHourJobProgress(job_id, payload);
+        break;
+      default:
+        this.logger.warn(`Unknown Magic Hour event type: ${event_type}`);
+    }
+
+    // Audit log
+    await this.auditService.log({
+      action: `magichour.webhook.${event_type}`,
+      entityType: 'ProcessingJob',
+      entityId: job_id,
+      newValues: payload,
+      ipAddress: req.ip,
+      userAgent: req.get('User-Agent'),
+      source: 'WEBHOOK',
+    });
+  }
+
+  private async handleMagicHourJobStarted(jobId: string, payload: any): Promise<void> {
+    this.logger.log(`Magic Hour job started: ${jobId}`);
+    
+    await this.magicHourService.updateJobStatus(jobId, 'PROCESSING', {
+      startedAt: new Date(),
+      webhookData: payload,
+    });
+
+    // Create transaction event
+    const job = await this.magicHourService.getJobByExternalId(jobId);
+    if (job && job.userId) {
+      await this.transactionService.createTransactionEvent(
+        job.id,
+        'PROCESSING',
+        {
+          message: 'Magic Hour headshot generation started',
+          data: { jobId, payload },
+          source: 'MAGIC_HOUR_WEBHOOK',
+        }
+      );
+    }
+  }
+
+  private async handleMagicHourJobCompleted(jobId: string, result: any, payload: any): Promise<void> {
+    this.logger.log(`Magic Hour job completed: ${jobId}`);
+
+    const job = await this.magicHourService.updateJobStatus(jobId, 'COMPLETED', {
+      completedAt: new Date(),
+      outputData: result,
+      webhookData: payload,
+    });
+
+    if (job && job.userId) {
+      // Send completion email
+      await this.magicHourService.sendCompletionNotification(job.userId, job);
+
+      // Create transaction event
+      await this.transactionService.createTransactionEvent(
+        job.id,
+        'COMPLETED',
+        {
+          message: 'Magic Hour headshot generation completed successfully',
+          data: { jobId, result, payload },
+          source: 'MAGIC_HOUR_WEBHOOK',
+        }
+      );
+
+      // Update user analytics
+      await this.auditService.log({
+        userId: job.userId,
+        action: 'headshot.generation.completed',
+        entityType: 'ProcessingJob',
+        entityId: job.id,
+        newValues: { result, completedAt: new Date() },
+        source: 'WEBHOOK',
+      });
+    }
+  }
+
+  private async handleMagicHourJobFailed(jobId: string, error: any, payload: any): Promise<void> {
+    this.logger.error(`Magic Hour job failed: ${jobId}`, error);
+
+    const job = await this.magicHourService.updateJobStatus(jobId, 'FAILED', {
+      completedAt: new Date(),
+      errorMessage: error?.message || 'Job failed',
+      webhookData: payload,
+    });
+
+    if (job && job.userId) {
+      // Send failure notification
+      await this.magicHourService.sendFailureNotification(job.userId, job, error);
+
+      // Create transaction event
+      await this.transactionService.createTransactionEvent(
+        job.id,
+        'FAILED',
+        {
+          message: `Magic Hour headshot generation failed: ${error?.message || 'Unknown error'}`,
+          data: { jobId, error, payload },
+          source: 'MAGIC_HOUR_WEBHOOK',
+        }
+      );
+
+      // Refund credits if applicable
+      if (job.creditsUsed > 0) {
+        await this.magicHourService.refundCredits(job.userId, job.creditsUsed, `Refund for failed job ${jobId}`);
+      }
+    }
+  }
+
+  private async handleMagicHourJobProgress(jobId: string, payload: any): Promise<void> {
+    this.logger.log(`Magic Hour job progress: ${jobId}`, { progress: payload.progress });
+
+    await this.magicHourService.updateJobProgress(jobId, payload.progress);
+
+    // Create transaction event for significant progress milestones
+    const progress = payload.progress || 0;
+    if (progress % 25 === 0) { // Log at 25%, 50%, 75%, 100%
+      const job = await this.magicHourService.getJobByExternalId(jobId);
+      if (job) {
+        await this.transactionService.createTransactionEvent(
+          job.id,
+          'STATUS_UPDATED',
+          {
+            message: `Magic Hour job progress: ${progress}%`,
+            data: { jobId, progress, payload },
+            source: 'MAGIC_HOUR_WEBHOOK',
+          }
+        );
+      }
+    }
+  }
+
+  // ========================================
+  // RAZORPAY PAYMENT WEBHOOKS
+  // ========================================
+
+  @Post('razorpay')
+  @ApiOperation({ summary: 'Handle Razorpay payment webhooks' })
+  @ApiResponse({ status: 200, description: 'Webhook processed successfully' })
+  async handleRazorpayWebhook(
+    @Body() payload: any,
+    @Headers() headers: any,
+    @Req() req: Request,
+    @Res() res: Response,
+  ) {
+    try {
+      this.logger.log('Received Razorpay webhook', { 
+        event: payload.event,
+        paymentId: payload.payload?.payment?.entity?.id 
+      });
+
+      // Verify webhook signature
+      const isValid = await this.webhookService.verifyRazorpaySignature(
+        JSON.stringify(payload),
+        headers['x-razorpay-signature'],
+      );
+
+      if (!isValid) {
+        this.logger.error('Invalid Razorpay webhook signature');
+        throw new HttpException('Invalid signature', HttpStatus.UNAUTHORIZED);
+      }
+
+      // Process the webhook
+      await this.processRazorpayWebhook(payload, req);
+
+      // Log webhook delivery
+      await this.webhookService.logWebhookDelivery({
+        source: 'RAZORPAY',
+        eventType: payload.event,
+        payload,
+        status: 'SUCCESS',
+        ipAddress: req.ip,
+        userAgent: req.get('User-Agent'),
+      });
+
+      res.status(HttpStatus.OK).json({ 
+        success: true, 
+        message: 'Webhook processed successfully' 
+      });
+
+    } catch (error) {
+      this.logger.error('Failed to process Razorpay webhook', error);
+
+      await this.webhookService.logWebhookDelivery({
+        source: 'RAZORPAY',
+        eventType: payload?.event || 'unknown',
+        payload,
+        status: 'FAILED',
+        error: error.message,
+        ipAddress: req.ip,
+        userAgent: req.get('User-Agent'),
+      });
+
+      res.status(HttpStatus.INTERNAL_SERVER_ERROR).json({
+        success: false,
+        error: error.message,
+      });
+    }
+  }
+
+  private async processRazorpayWebhook(payload: any, req: Request): Promise<void> {
+    const { event, payload: webhookPayload } = payload;
+    const paymentEntity = webhookPayload?.payment?.entity;
+
+    switch (event) {
+      case 'payment.authorized':
+        await this.handlePaymentAuthorized(paymentEntity, payload);
+        break;
+      case 'payment.captured':
+        await this.handlePaymentCaptured(paymentEntity, payload);
+        break;
+      case 'payment.failed':
+        await this.handlePaymentFailed(paymentEntity, payload);
+        break;
+      case 'refund.created':
+        await this.handleRefundCreated(webhookPayload?.refund?.entity, payload);
+        break;
+      case 'dispute.created':
+        await this.handleDisputeCreated(webhookPayload?.dispute?.entity, payload);
+        break;
+      default:
+        this.logger.warn(`Unknown Razorpay event: ${event}`);
+    }
+
+    // Audit log
+    await this.auditService.log({
+      action: `razorpay.webhook.${event}`,
+      entityType: 'Payment',
+      entityId: paymentEntity?.id,
+      newValues: payload,
+      ipAddress: req.ip,
+      userAgent: req.get('User-Agent'),
+      source: 'WEBHOOK',
+    });
+  }
+
+  private async handlePaymentAuthorized(payment: any, webhookPayload: any): Promise<void> {
+    this.logger.log(`Payment authorized: ${payment.id}`);
+    
+    await this.paymentsService.updatePaymentStatus(payment.id, 'PROCESSING', {
+      razorpayPaymentId: payment.id,
+      webhookData: webhookPayload,
+    });
+  }
+
+  private async handlePaymentCaptured(payment: any, webhookPayload: any): Promise<void> {
+    this.logger.log(`Payment captured: ${payment.id}`);
+    
+    const updatedPayment = await this.paymentsService.updatePaymentStatus(payment.id, 'COMPLETED', {
+      razorpayPaymentId: payment.id,
+      webhookData: webhookPayload,
+    });
+
+    // Award credits if applicable
+    if (updatedPayment && updatedPayment.creditsAwarded > 0) {
+      await this.paymentsService.awardCredits(updatedPayment.userId, updatedPayment.creditsAwarded);
+    }
+  }
+
+  private async handlePaymentFailed(payment: any, webhookPayload: any): Promise<void> {
+    this.logger.error(`Payment failed: ${payment.id}`);
+    
+    await this.paymentsService.updatePaymentStatus(payment.id, 'FAILED', {
+      razorpayPaymentId: payment.id,
+      failureReason: payment.error_description,
+      webhookData: webhookPayload,
+    });
+  }
+
+  private async handleRefundCreated(refund: any, webhookPayload: any): Promise<void> {
+    this.logger.log(`Refund created: ${refund.id}`);
+    
+    // Handle refund logic
+    await this.paymentsService.processRefund(refund.payment_id, refund.amount, refund.id);
+  }
+
+  private async handleDisputeCreated(dispute: any, webhookPayload: any): Promise<void> {
+    this.logger.warn(`Dispute created: ${dispute.id}`);
+    
+    // Handle dispute logic
+    await this.paymentsService.handleDispute(dispute.payment_id, dispute);
+  }
+
+  // ========================================
+  // GENERIC WEBHOOK ENDPOINTS
+  // ========================================
+
+  @Post('generic/:source')
+  @ApiOperation({ summary: 'Handle generic webhooks from various sources' })
+  @ApiResponse({ status: 200, description: 'Webhook processed successfully' })
+  async handleGenericWebhook(
+    @Body() payload: any,
+    @Headers() headers: any,
+    @Req() req: Request,
+    @Res() res: Response,
+  ) {
+    try {
+      const source = req.params.source.toUpperCase();
+      
+      this.logger.log(`Received ${source} webhook`, payload);
+
+      // Log webhook delivery
+      await this.webhookService.logWebhookDelivery({
+        source,
+        eventType: payload.event_type || payload.event || 'generic',
+        payload,
+        status: 'SUCCESS',
+        ipAddress: req.ip,
+        userAgent: req.get('User-Agent'),
+      });
+
+      // Audit log
+      await this.auditService.log({
+        action: `${source.toLowerCase()}.webhook.received`,
+        entityType: 'Webhook',
+        newValues: payload,
+        ipAddress: req.ip,
+        userAgent: req.get('User-Agent'),
+        source: 'WEBHOOK',
+      });
+
+      res.status(HttpStatus.OK).json({ 
+        success: true, 
+        message: 'Webhook received successfully' 
+      });
+
+    } catch (error) {
+      this.logger.error('Failed to process generic webhook', error);
+      res.status(HttpStatus.INTERNAL_SERVER_ERROR).json({
+        success: false,
+        error: error.message,
+      });
+    }
+  }
+
+  // ========================================
+  // WEBHOOK MANAGEMENT ENDPOINTS
+  // ========================================
+
+  @Post('test')
+  @ApiOperation({ summary: 'Test webhook endpoint' })
+  @ApiResponse({ status: 200, description: 'Test webhook successful' })
+  async testWebhook(
+    @Body() payload: any,
+    @Req() req: Request,
+    @Res() res: Response,
+  ) {
+    this.logger.log('Test webhook received', payload);
+
+    await this.webhookService.logWebhookDelivery({
+      source: 'TEST',
+      eventType: 'test',
+      payload,
+      status: 'SUCCESS',
+      ipAddress: req.ip,
+      userAgent: req.get('User-Agent'),
+    });
+
+    res.status(HttpStatus.OK).json({
+      success: true,
+      message: 'Test webhook received successfully',
+      timestamp: new Date().toISOString(),
+      payload,
+    });
+  }
+} 
