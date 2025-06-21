@@ -30,10 +30,10 @@ async function bootstrap() {
     contentSecurityPolicy: {
       directives: {
         defaultSrc: ["'self'"],
-        imgSrc: ["'self'", "data:", "http://localhost:3000", "http://localhost:3001"],
+        imgSrc: ["'self'", "data:", "http://localhost:3000", "https://realign.destinpq.com", "https://realign-api.destinpq.com"],
         styleSrc: ["'self'", "'unsafe-inline'", "https:"],
         scriptSrc: ["'self'"],
-        connectSrc: ["'self'", "http://localhost:3000", "http://localhost:3001"],
+        connectSrc: ["'self'", "http://localhost:3000", "https://realign.destinpq.com", "https://realign-api.destinpq.com"],
       },
     },
     crossOriginResourcePolicy: { policy: "cross-origin" }
@@ -45,7 +45,8 @@ async function bootstrap() {
   app.enableCors({
     origin: [
       'http://localhost:3000',
-      'http://localhost:3001',
+      'https://realign.destinpq.com',
+      'https://realign-api.destinpq.com',
       process.env.FRONTEND_URL,
     ].filter(Boolean),
     credentials: true,

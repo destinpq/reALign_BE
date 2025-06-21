@@ -1,7 +1,7 @@
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient, UserRole } from '@prisma/client';
 import * as fs from 'fs';
 import * as path from 'path';
-import * as csv from 'csv-parse';
+import { parse } from 'csv-parse';
 
 const prisma = new PrismaClient();
 
@@ -18,9 +18,9 @@ async function parseCSV(): Promise<CSVRow[]> {
     const results: CSVRow[] = [];
     
     fs.createReadStream(csvPath)
-      .pipe(csv.parse({ 
-        headers: true,
-        skipEmptyLines: true 
+      .pipe(parse({ 
+        columns: true,
+        skip_empty_lines: true 
       }))
       .on('data', (data) => results.push(data))
       .on('end', () => resolve(results))
@@ -38,15 +38,15 @@ async function seedWearableItems() {
 
     // Transform CSV data to match our schema
     const wearableItems = csvData.map(row => ({
-      externalId: row.ID,
+      id: row.ID, // Use CSV ID directly as per schema
+      name: row['Wearable Item'],
       category: row.Category,
-      wearableName: row['Wearable Item'],
       isActive: true,
     }));
 
-    // Remove duplicates based on externalId
+    // Remove duplicates based on id
     const uniqueItems = Array.from(
-      new Map(wearableItems.map(item => [item.externalId, item])).values()
+      new Map(wearableItems.map(item => [item.id, item])).values()
     );
 
     console.log(`🔄 Processing ${uniqueItems.length} unique items...`);
@@ -111,20 +111,27 @@ async function seedUsers() {
       password: await bcrypt.hash('Admin123!', saltRounds),
       firstName: 'Admin',
       lastName: 'User',
-      username: 'admin',
-      role: 'ADMIN',
+      role: UserRole.ADMIN,
       credits: 1000,
-      emailVerified: true,
+      isEmailVerified: true,
+    },
+    {
+      email: 'test@example.com',
+      password: await bcrypt.hash('password123', saltRounds),
+      firstName: 'Test',
+      lastName: 'User',
+      role: UserRole.USER,
+      credits: 1000,
+      isEmailVerified: true,
     },
     {
       email: 'user@example.com',
       password: await bcrypt.hash('User123!', saltRounds),
-      firstName: 'Test',
+      firstName: 'Demo',
       lastName: 'User',
-      username: 'testuser',
-      role: 'USER',
+      role: UserRole.USER,
       credits: 50,
-      emailVerified: true,
+      isEmailVerified: true,
     },
   ];
 
@@ -132,7 +139,7 @@ async function seedUsers() {
     try {
       await prisma.user.upsert({
         where: { email: userData.email },
-        update: {},
+        update: { credits: userData.credits }, // Update credits if user exists
         create: userData,
       });
       console.log(`✅ Created/updated user: ${userData.email}`);
@@ -144,8 +151,18 @@ async function seedUsers() {
 
 async function main() {
   try {
+    console.log('🚀 Starting database seeding...');
     await seedUsers();
-    await seedWearableItems();
+    
+    // Only seed wearables if CSV file exists
+    const csvPath = path.join(__dirname, '../../shared/10_000_Specific_Wearable_Avatar_Materials.csv');
+    if (fs.existsSync(csvPath)) {
+      await seedWearableItems();
+    } else {
+      console.log('⚠️ CSV file not found, skipping wearable items seeding');
+    }
+    
+    console.log('🎉 Database seeding completed successfully!');
   } catch (error) {
     console.error('❌ Seeding failed:', error);
     process.exit(1);

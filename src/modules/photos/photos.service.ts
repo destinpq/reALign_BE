@@ -253,7 +253,7 @@ export class PhotosService {
         // Save locally if no AWS credentials
         const localPath = path.join(this.uploadDir, filename);
         await fs.promises.writeFile(localPath, processedImage);
-        publicUrl = `${process.env.API_BASE_URL || 'http://localhost:3001'}/uploads/${filename}`;
+        publicUrl = `${process.env.API_BASE_URL || 'https://realign-api.destinpq.com'}/uploads/${filename}`;
         this.logger.log(`✅ Saved locally: ${publicUrl}`);
       } else {
         // Upload to S3
@@ -329,7 +329,7 @@ export class PhotosService {
         // Save locally if no AWS credentials
         const localPath = path.join(this.uploadDir, filename);
         await fs.promises.writeFile(localPath, processedImage);
-        publicUrl = `${process.env.API_BASE_URL || 'http://localhost:3001'}/uploads/${filename}`;
+        publicUrl = `${process.env.API_BASE_URL || 'https://realign-api.destinpq.com'}/uploads/${filename}`;
         this.logger.log(`✅ Saved locally: ${publicUrl}`);
       } else {
         // Upload to S3

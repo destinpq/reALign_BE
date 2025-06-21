@@ -199,7 +199,7 @@ export class PhotosController {
       success: true,
       data: {
         id: result.id,
-        url: result.publicUrl || `${process.env.API_BASE_URL || 'http://localhost:3001'}/api/v1/photos/${result.id}/view`,
+        url: result.publicUrl || `${process.env.API_BASE_URL || 'https://realign-api.destinpq.com'}/api/v1/photos/${result.id}/view`,
         filename: result.filename,
       }
     };

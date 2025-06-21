@@ -1339,7 +1339,7 @@ export class MagicHourController {
         image_url: {
           type: 'string',
           description: 'URL of the source image',
-          example: 'http://localhost:3001/api/v1/photos/cmcGpzzjg0N0Sz2ndBby56f1z/view'
+          example: 'https://realign-api.destinpq.com/api/v1/photos/cmcGpzzjg0N0Sz2ndBby56f1z/view'
         },
         prompt: {
           type: 'string',
