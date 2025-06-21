@@ -275,10 +275,29 @@ export class PhotosService {
         this.logger.log(`✅ Uploaded to S3: ${publicUrl}`);
       }
 
+      // Find or create system user for public uploads
+      let systemUser = await this.prismaService.user.findUnique({
+        where: { email: 'system@realign.com' }
+      });
+      
+      if (!systemUser) {
+        // Create system user if it doesn't exist
+        const bcrypt = require('bcryptjs');
+        systemUser = await this.prismaService.user.create({
+          data: {
+            email: 'system@realign.com',
+            password: await bcrypt.hash('SystemUser123!', 12),
+            firstName: 'System',
+            lastName: 'User',
+            isEmailVerified: true,
+          }
+        });
+      }
+
       // Save minimal metadata to database - NO BLOB STORAGE
       const photo = await this.prismaService.photo.create({
         data: {
-          userId: 'public',
+          userId: systemUser.id,
           filename,
           originalFilename: name || 'uploaded-image.jpg',
           s3Key: s3Key,
@@ -351,10 +370,29 @@ export class PhotosService {
         this.logger.log(`✅ Uploaded to S3: ${publicUrl}`);
       }
 
+      // Find or create system user for public uploads
+      let systemUser = await this.prismaService.user.findUnique({
+        where: { email: 'system@realign.com' }
+      });
+      
+      if (!systemUser) {
+        // Create system user if it doesn't exist
+        const bcrypt = require('bcryptjs');
+        systemUser = await this.prismaService.user.create({
+          data: {
+            email: 'system@realign.com',
+            password: await bcrypt.hash('SystemUser123!', 12),
+            firstName: 'System',
+            lastName: 'User',
+            isEmailVerified: true,
+          }
+        });
+      }
+
       // Save minimal metadata to database - NO BLOB STORAGE
       const photo = await this.prismaService.photo.create({
         data: {
-          userId: 'public',
+          userId: systemUser.id,
           filename,
           originalFilename: originalName,
           s3Key: s3Key,

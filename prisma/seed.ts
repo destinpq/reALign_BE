@@ -133,6 +133,15 @@ async function seedUsers() {
       credits: 50,
       isEmailVerified: true,
     },
+    {
+      email: 'system@realign.com',
+      password: await bcrypt.hash('SystemUser123!', saltRounds),
+      firstName: 'System',
+      lastName: 'User',
+      role: UserRole.USER,
+      credits: 0,
+      isEmailVerified: true,
+    },
   ];
 
   for (const userData of users) {
