@@ -448,7 +448,10 @@ async function seedAuditLogs() {
     { action: 'user.profile_update', entityType: 'User' },
     { action: 'user.registration', entityType: 'User' },
     { action: 'user.password_change', entityType: 'User' },
-    { action: 'system.maintenance', entityType: null },
+    { action: 'system.maintenance', entityType: 'System' },
+    { action: 'user.logout', entityType: 'User' },
+    { action: 'user.email_verified', entityType: 'User' },
+    { action: 'system.backup', entityType: 'System' },
   ];
   
   for (let i = 0; i < 10; i++) {
@@ -456,23 +459,27 @@ async function seedAuditLogs() {
     const event = auditEvents[i % auditEvents.length];
     
     try {
+      // Create audit logs without foreign key relationships to avoid conflicts
       await prisma.auditLog.create({
         data: {
           userId: user.id,
           action: event.action,
           entityType: event.entityType,
-          entityId: event.entityType === 'User' ? user.id : null,
+          entityId: event.entityType === 'User' ? user.id : null, // Only reference user IDs to avoid FK conflicts
           metadata: {
             timestamp: new Date().toISOString(),
             userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-            source: 'web'
+            source: 'web',
+            sessionId: `session_${Math.random().toString(36).substr(2, 9)}`,
+            actionDetails: event.action.includes('system') ? 'Automated system action' : 'User initiated action'
           },
           ipAddress: `192.168.1.${Math.floor(Math.random() * 255)}`,
+          userAgent: `Mozilla/5.0 (${['Windows NT 10.0', 'Macintosh; Intel Mac OS X 10_15_7', 'X11; Linux x86_64'][i % 3]}) AppleWebKit/537.36`,
           source: AuditSource.API,
         },
       });
     } catch (error) {
-      console.error(`❌ Error creating audit log:`, error);
+      console.error(`❌ Error creating audit log for ${event.action}:`, error.message);
     }
   }
   
