@@ -202,6 +202,15 @@ export class CreateAvatarDto {
   @IsOptional()
   @IsIn(['male', 'female', 'unisex'])
   gender?: 'male' | 'female' | 'unisex';
+
+  @ApiPropertyOptional({
+    description: 'AI-detected accessories to include in avatar (e.g., turban, glasses, jewelry)',
+    example: ['turban', 'glasses', 'beard'],
+  })
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  accessories?: string[];
 }
 
 export class AvatarStyleDto {

@@ -15,8 +15,8 @@ async function bootstrap() {
 
   // Get config service
   const configService = app.get(ConfigService);
-  const port = configService.get('PORT') || 3001;
-  const corsOrigin = configService.get('CORS_ORIGIN') || 'http://localhost:3000';
+  const port = configService.get('PORT') || 1001;
+  const corsOrigin = configService.get('CORS_ORIGIN') || 'http://localhost:1000';
 
   // Configure body parsers with larger limits for image uploads
   const express = require('express');
@@ -44,7 +44,7 @@ async function bootstrap() {
   // CORS configuration
   app.enableCors({
     origin: [
-      'http://localhost:3000',
+      'http://localhost:1000',
       'https://realign.destinpq.com',
       'https://realign-api.destinpq.com',
       process.env.FRONTEND_URL,

@@ -30,11 +30,17 @@ export interface WelcomeEmailData {
 @Injectable()
 export class EmailService {
   private readonly logger = new Logger(EmailService.name);
+  private readonly emailEnabled: boolean;
 
   constructor(
     private readonly mailerService: MailerService,
     private readonly prismaService: PrismaService,
-  ) {}
+  ) {
+    this.emailEnabled = process.env.EMAIL_ENABLED !== 'false' && !!process.env.SMTP_HOST;
+    if (!this.emailEnabled) {
+      this.logger.warn('Email service is disabled for development mode');
+    }
+  }
 
   async sendPaymentConfirmation(to: string, data: PaymentConfirmationData) {
     return this.sendEmail({
@@ -246,6 +252,22 @@ export class EmailService {
       });
 
       try {
+        if (!this.emailEnabled) {
+          // Mock email sending for development
+          this.logger.log(`[MOCK] Would send email: ${emailData.template} to ${emailData.to} with subject: ${emailData.subject}`);
+          
+          // Update email status to sent (mocked)
+          await this.prismaService.emailNotification.update({
+            where: { id: emailNotification.id },
+            data: {
+              status: EmailStatus.SENT,
+              sentAt: new Date(),
+            },
+          });
+
+          return { success: true, emailId: emailNotification.id, mocked: true };
+        }
+
         // Send email using mailer service
         await this.mailerService.sendMail({
           to: emailData.to,
@@ -278,10 +300,24 @@ export class EmailService {
         });
 
         this.logger.error(`Failed to send email: ${emailData.template} to ${emailData.to}`, error);
+        
+        // In development mode, don't throw email errors
+        if (!this.emailEnabled) {
+          this.logger.warn('Email error ignored in development mode');
+          return { success: false, emailId: emailNotification.id, error: error.message };
+        }
+        
         throw error;
       }
     } catch (error) {
       this.logger.error('Email service error:', error);
+      
+      // In development mode, don't throw database errors related to email
+      if (!this.emailEnabled) {
+        this.logger.warn('Email database error ignored in development mode');
+        return { success: false, error: error.message };
+      }
+      
       throw error;
     }
   }

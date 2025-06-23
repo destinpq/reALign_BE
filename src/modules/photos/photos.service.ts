@@ -256,14 +256,13 @@ export class PhotosService {
         publicUrl = `${process.env.API_BASE_URL || 'https://realign-api.destinpq.com'}/uploads/${filename}`;
         this.logger.log(`✅ Saved locally: ${publicUrl}`);
       } else {
-        // Upload to S3
+        // Upload to S3 (remove ACL since bucket doesn't support it)
         await this.s3Client.send(
           new PutObjectCommand({
             Bucket: this.bucketName,
             Key: s3Key,
             Body: processedImage,
             ContentType: 'image/jpeg',
-            ACL: 'public-read',
             Metadata: {
               originalName: name || 'uploaded-image.jpg',
               uploadType: 'public'
@@ -351,14 +350,13 @@ export class PhotosService {
         publicUrl = `${process.env.API_BASE_URL || 'https://realign-api.destinpq.com'}/uploads/${filename}`;
         this.logger.log(`✅ Saved locally: ${publicUrl}`);
       } else {
-        // Upload to S3
+        // Upload to S3 (remove ACL since bucket doesn't support it)
         await this.s3Client.send(
           new PutObjectCommand({
             Bucket: this.bucketName,
             Key: s3Key,
             Body: processedImage,
             ContentType: 'image/jpeg',
-            ACL: 'public-read',
             Metadata: {
               originalName: originalName,
               uploadType: 'direct-file'
@@ -414,6 +412,80 @@ export class PhotosService {
     } catch (error) {
       this.logger.error('❌ Clean file upload failed:', error);
       throw new BadRequestException(`Upload failed: ${error.message}`);
+    }
+  }
+
+  // Method to upload localhost images to S3 for external API access
+  async convertLocalImageToS3(localImageUrl: string): Promise<string> {
+    // DON'T CONVERT! Just return the original S3 URL if it's already uploaded properly
+    if (localImageUrl.includes('s3.amazonaws.com')) {
+      this.logger.log(`✅ Image already on S3, using directly: ${localImageUrl}`);
+      return localImageUrl;
+    }
+    
+    this.logger.error(`❌ Image not on S3, this should not happen: ${localImageUrl}`);
+    throw new BadRequestException(`Image should already be on S3. Upload process failed. URL: ${localImageUrl}`);
+  }
+
+  // Store AI analysis results in database - COMPLETE DATA STORAGE
+  async storeAnalysisResult(imageUrl: string, analysis: any): Promise<void> {
+    try {
+      // Find the photo by S3 URL
+      const urlFilename = imageUrl.split('/').pop();
+      const photo = await this.prismaService.photo.findFirst({
+        where: {
+          OR: [
+            { s3Key: { contains: urlFilename } },
+            { filename: urlFilename }
+          ]
+        }
+      });
+      
+      if (photo) {
+        // Store ALL analysis data in description field as JSON
+        const analysisJson = JSON.stringify({
+          gender: analysis.gender || 'unknown',
+          age: analysis.age || 'unknown', 
+          ethnicity: analysis.ethnicity || 'unknown',
+          hairColor: analysis.hairColor || 'unknown',
+          eyeColor: analysis.eyeColor || 'unknown',
+          bodyType: analysis.bodyType || 'unknown',
+          accessories: analysis.accessories || 'none',
+          fullDescription: analysis.description || '',
+          analyzedAt: new Date().toISOString()
+        });
+
+        await this.prismaService.photo.update({
+          where: { id: photo.id },
+          data: {
+            description: `AI_ANALYSIS: ${analysisJson}`
+          }
+        });
+        
+        this.logger.log(`💾 COMPLETE Analysis stored for photo ${photo.id}: ${JSON.stringify(analysis)}`);
+      } else {
+        this.logger.error(`❌ Photo not found for URL: ${imageUrl}, filename: ${urlFilename}`);
+      }
+    } catch (error) {
+      this.logger.error('❌ Failed to store complete analysis:', error);
+      throw error;
+    }
+  }
+
+  // Find photo by S3 key
+  async findByS3Key(s3Key: string) {
+    try {
+      const photo = await this.prismaService.photo.findFirst({
+        where: {
+          s3Key: {
+            contains: s3Key
+          }
+        }
+      });
+      return photo;
+    } catch (error) {
+      this.logger.error('❌ Error finding photo by S3 key:', error);
+      return null;
     }
   }
 } 

@@ -9,32 +9,45 @@ import { join } from 'path';
   imports: [
     MailerModule.forRootAsync({
       inject: [ConfigService],
-      useFactory: (configService: ConfigService) => ({
-        transport: {
-          host: configService.get<string>('SMTP_HOST') || 'localhost',
-          port: configService.get<number>('SMTP_PORT') || 587,
-          secure: configService.get<boolean>('SMTP_SECURE') || false,
-          ignoreTLS: true, // Ignore TLS errors for development
-          requireTLS: false, // Don't require TLS
-          tls: {
-            rejectUnauthorized: false, // Ignore certificate errors
+      useFactory: (configService: ConfigService) => {
+        const emailEnabled = configService.get<string>('EMAIL_ENABLED') !== 'false';
+        const smtpHost = configService.get<string>('SMTP_HOST');
+        
+        // Always use a working transport configuration
+        return {
+          transport: {
+            // Use a simple SMTP transport that works in development
+            host: smtpHost || 'localhost',
+            port: configService.get<number>('SMTP_PORT') || 1025, // Use mailhog port for dev
+            secure: false,
+            ignoreTLS: true,
+            requireTLS: false,
+            tls: {
+              rejectUnauthorized: false,
+            },
+            // Only add auth if we have credentials
+            ...(smtpHost && configService.get<string>('SMTP_USER') ? {
+              auth: {
+                user: configService.get<string>('SMTP_USER'),
+                pass: configService.get<string>('SMTP_PASS'),
+              }
+            } : {}),
           },
-          auth: configService.get<string>('SMTP_USER') ? {
-            user: configService.get<string>('SMTP_USER'),
-            pass: configService.get<string>('SMTP_PASS'),
-          } : undefined, // Don't set auth if no credentials
-        },
-        defaults: {
-          from: `"reAlign PhotoMaker" <${configService.get<string>('SMTP_FROM')}>`,
-        },
-        template: {
-          dir: join(__dirname, 'templates'),
-          adapter: new HandlebarsAdapter(),
-          options: {
-            strict: true,
+          defaults: {
+            from: `"reAlign PhotoMaker" <${configService.get<string>('SMTP_FROM') || 'noreply@realign.local'}>`,
           },
-        },
-      }),
+          // Only add template config if email is fully enabled
+          ...(emailEnabled && smtpHost ? {
+            template: {
+              dir: join(__dirname, 'templates'),
+              adapter: new HandlebarsAdapter(),
+              options: {
+                strict: true,
+              },
+            },
+          } : {}),
+        };
+      },
     }),
   ],
   providers: [EmailService],

@@ -708,8 +708,18 @@ export class MagicHourService {
       })
       .join(', ');
 
+    // Construct accessories description from AI analysis
+    const accessoriesDescription = createAvatarDto.accessories?.length 
+      ? createAvatarDto.accessories.join(', ')
+      : '';
+
     // Construct the complete prompt
     let prompt = `Professional high-quality avatar photo of a person`;
+    
+    // Add AI-detected accessories FIRST (most important for cultural accuracy)
+    if (accessoriesDescription) {
+      prompt += ` with ${accessoriesDescription}`;
+    }
     
     if (wearableDescriptions) {
       prompt += ` wearing ${wearableDescriptions}`;

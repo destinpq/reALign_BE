@@ -235,6 +235,7 @@ export class PaymentsService {
   }
 
   async storePaymentData(paymentData: {
+    userId: string; // 🔥 REQUIRE REAL USER ID!
     razorpayPaymentId: string;
     razorpayOrderId?: string;
     razorpaySignature?: string;
@@ -246,10 +247,22 @@ export class PaymentsService {
     metadata: any;
   }) {
     try {
+      // 🔥 VERIFY USER EXISTS FIRST!
+      const user = await this.prismaService.user.findUnique({
+        where: { id: paymentData.userId },
+        select: { id: true, email: true }
+      });
+
+      if (!user) {
+        throw new Error(`User with ID ${paymentData.userId} not found. Please log in again.`);
+      }
+
+      this.logger.log(`🔐 VERIFIED USER FOR PAYMENT: ${user.email} (${user.id})`);
+
       // Store payment data in database immediately
       const payment = await this.prismaService.payment.create({
         data: {
-          userId: 'anonymous-user', // Will be linked later when user logs in
+          userId: paymentData.userId, // 🔥 USE REAL USER ID!
           razorpayPaymentId: paymentData.razorpayPaymentId,
           razorpayOrderId: paymentData.razorpayOrderId,
           razorpaySignature: paymentData.razorpaySignature,

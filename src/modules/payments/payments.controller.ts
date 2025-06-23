@@ -74,7 +74,7 @@ export class PaymentsController {
     @Request() req,
     @Body() createOrderDto: CreateOrderDto,
   ) {
-    return this.paymentsService.createOrder(req.user.userId, createOrderDto);
+    return this.paymentsService.createOrder(req.user.id, createOrderDto);
   }
 
   @Post('verify')
@@ -104,7 +104,7 @@ export class PaymentsController {
     @Request() req,
     @Body() verifyPaymentDto: VerifyPaymentDto,
   ) {
-    return this.paymentsService.verifyPayment(req.user.userId, verifyPaymentDto);
+    return this.paymentsService.verifyPayment(req.user.id, verifyPaymentDto);
   }
 
   @Post('webhook')
@@ -166,7 +166,7 @@ export class PaymentsController {
     @Query('limit') limit?: number,
   ) {
     return this.paymentsService.getPaymentHistory(
-      req.user.userId,
+      req.user.id,
       page || 1,
       limit || 20,
     );
@@ -191,7 +191,7 @@ export class PaymentsController {
     },
   })
   async getSubscriptionStatus(@Request() req) {
-    const hasValidSubscription = await this.paymentsService.hasValidSubscription(req.user.userId);
+    const hasValidSubscription = await this.paymentsService.hasValidSubscription(req.user.id);
     return {
       hasValidSubscription,
       canGenerateHeadshots: hasValidSubscription,
@@ -315,11 +315,13 @@ export class PaymentsController {
   }
 
   @Post('store-payment')
+  @UseGuards(JwtAuthGuard)
   @ApiOperation({
     summary: 'Store payment data and link to avatar generation',
     description: 'Store payment data and link it to avatar generation session',
   })
   async storePaymentData(
+    @Request() req,
     @Body() paymentData: {
       razorpay_payment_id: string;
       razorpay_order_id?: string;
@@ -331,8 +333,17 @@ export class PaymentsController {
     },
   ) {
     try {
+      // 🔥 VERIFY USER IS LOGGED IN FIRST!
+      if (!req.user || !req.user.id) {
+        throw new Error('User not authenticated. Please log in first.');
+      }
+
+      const userId = req.user.id;
+      console.log(`🔐 AUTHENTICATED USER MAKING PAYMENT: ${userId}`);
+
       // Store payment data and link to avatar generation
       const payment = await this.paymentsService.storePaymentData({
+        userId: userId, // 🔥 USE REAL USER ID!
         razorpayPaymentId: paymentData.razorpay_payment_id,
         razorpayOrderId: paymentData.razorpay_order_id,
         razorpaySignature: paymentData.razorpay_signature,
