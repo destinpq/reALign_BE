@@ -4,7 +4,8 @@ import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { ConfigService } from '@nestjs/config';
 import cookieParser from 'cookie-parser';
 import helmet from 'helmet';
-const compression = require('compression');
+import compression from 'compression';
+import express from 'express';
 import { AppModule } from './app.module';
 import { PrismaService } from './database/prisma.service';
 import { NestExpressApplication } from '@nestjs/platform-express';
@@ -16,10 +17,8 @@ async function bootstrap() {
   // Get config service
   const configService = app.get(ConfigService);
   const port = configService.get('PORT') || 1001;
-  const corsOrigin = configService.get('CORS_ORIGIN') || 'http://localhost:1000';
 
   // Configure body parsers with larger limits for image uploads
-  const express = require('express');
   app.use(express.json({ limit: '50mb' })); // Increase JSON payload limit
   app.use(express.urlencoded({ limit: '50mb', extended: true })); // Increase URL-encoded limit
   app.use(express.raw({ limit: '50mb' })); // Increase raw body limit
@@ -41,43 +40,24 @@ async function bootstrap() {
   app.use(compression());
   app.use(cookieParser());
 
-  // CORS configuration
+  // Enable CORS for frontend communication
   app.enableCors({
     origin: [
-      'http://localhost:1000',
       'http://localhost:3000',
       'https://realign.destinpq.com',
-      'https://realign-api.destinpq.com',
-      process.env.FRONTEND_URL,
-      process.env.CORS_ORIGIN?.split(',') || [],
-    ].flat().filter(Boolean),
+      'https://realign-frontend.destinpq.com',
+    ],
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-    allowedHeaders: [
-      'Content-Type', 
-      'Authorization', 
-      'Accept', 
-      'Origin', 
-      'X-Requested-With',
-      'Access-Control-Allow-Origin',
-      'Access-Control-Allow-Headers',
-      'Access-Control-Allow-Methods',
-    ],
-    exposedHeaders: ['Content-Length', 'Content-Type'],
-    optionsSuccessStatus: 200,
+    allowedHeaders: ['Content-Type', 'Authorization', 'Accept'],
   });
 
   // Global validation pipe
-  app.useGlobalPipes(
-    new ValidationPipe({
-      whitelist: true,
-      forbidNonWhitelisted: true,
-      transform: true,
-      transformOptions: {
-        enableImplicitConversion: true,
-      },
-    }),
-  );
+  app.useGlobalPipes(new ValidationPipe({
+    whitelist: true,
+    forbidNonWhitelisted: true,
+    transform: true,
+  }));
 
   // Serve static files from uploads directory
   app.useStaticAssets(join(__dirname, '..', 'uploads'), {
@@ -98,30 +78,22 @@ async function bootstrap() {
   app.setGlobalPrefix('api/v1');
 
   // Swagger documentation
-  if (configService.get('SWAGGER_ENABLED') === 'true') {
-    const config = new DocumentBuilder()
-      .setTitle('ReAlign PhotoMaker API')
-      .setDescription('API for professional photo generation and avatar customization')
-      .setVersion('1.0')
-      .addBearerAuth()
-      .addTag('auth', 'Authentication endpoints')
-      .addTag('users', 'User management')
-      .addTag('photos', 'Photo upload and management')
-      .addTag('wearables', 'Wearable items and selections')
-      .addTag('customizations', 'Avatar customizations')
-      .build();
+  const config = new DocumentBuilder()
+    .setTitle('ReAlign PhotoMaker API')
+    .setDescription('API for ReAlign PhotoMaker application')
+    .setVersion('1.0')
+    .addBearerAuth()
+    .build();
+  const document = SwaggerModule.createDocument(app, config);
+  SwaggerModule.setup('api', app, document);
 
-    const document = SwaggerModule.createDocument(app, config);
-    SwaggerModule.setup('api/docs', app, document);
-  }
-
-  // Enable Prisma connection
+  // Enable shutdown hooks
   const prismaService = app.get(PrismaService);
   await prismaService.enableShutdownHooks(app);
 
   await app.listen(port);
-  console.log(`🚀 Application is running on: http://localhost:${port}`);
-  console.log(`📚 Swagger documentation: http://localhost:${port}/api/docs`);
+  console.log(`✅ ReAlign PhotoMaker API running on port ${port}`);
+  console.log(`📚 API Documentation: http://localhost:${port}/api`);
 }
 
 bootstrap(); 

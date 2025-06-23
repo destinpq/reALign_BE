@@ -213,7 +213,7 @@ export class WearableImageMapperService {
     const imageWords = cleanImageName.split(' ');
     
     let matchingWords = 0;
-    let totalWords = csvWords.length;
+    const totalWords = csvWords.length;
 
     for (const csvWord of csvWords) {
       if (imageWords.some(imageWord => 

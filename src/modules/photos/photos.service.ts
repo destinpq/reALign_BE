@@ -8,6 +8,7 @@ import sharp from 'sharp';
 import { v4 as uuidv4 } from 'uuid';
 import * as fs from 'fs';
 import * as path from 'path';
+import * as bcrypt from 'bcryptjs';
 
 @Injectable()
 export class PhotosService {
@@ -281,7 +282,7 @@ export class PhotosService {
       
       if (!systemUser) {
         // Create system user if it doesn't exist
-        const bcrypt = require('bcryptjs');
+        // bcrypt imported at top
         systemUser = await this.prismaService.user.create({
           data: {
             email: 'system@realign.com',
@@ -375,7 +376,7 @@ export class PhotosService {
       
       if (!systemUser) {
         // Create system user if it doesn't exist
-        const bcrypt = require('bcryptjs');
+        // bcrypt imported at top
         systemUser = await this.prismaService.user.create({
           data: {
             email: 'system@realign.com',

@@ -36,6 +36,7 @@ import { MulterOptions } from '@nestjs/platform-express/multer/interfaces/multer
 import { diskStorage } from 'multer';
 import { extname } from 'path';
 import { v4 as uuidv4 } from 'uuid';
+import { promises as fs } from 'fs';
 
 // Multer configuration for file uploads
 const multerConfig: MulterOptions = {
@@ -134,7 +135,6 @@ export class PhotosController {
 
     try {
       // Read the uploaded file buffer directly
-      const fs = require('fs').promises;
       const fileBuffer = await fs.readFile(file.path);
       
       // Use clean file buffer upload - NO BASE64!
@@ -162,7 +162,6 @@ export class PhotosController {
       console.error('❌ File upload failed:', error);
       
       // Clean up temporary file on error
-      const fs = require('fs').promises;
       await fs.unlink(file.path).catch(() => {});
       
       throw new BadRequestException(`Upload failed: ${error.message}`);

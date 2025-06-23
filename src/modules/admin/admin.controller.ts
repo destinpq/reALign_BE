@@ -125,12 +125,13 @@ export class AdminController {
   }
 
   @Post('content/flag')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN)
   @ApiOperation({ summary: 'Flag content as inappropriate' })
   @ApiResponse({ status: 200, description: 'Content flagged successfully' })
-  async flagContent(@Body() flagContentDto: FlagContentDto, @Request() req) {
-    // This would be implemented to manually flag content
-    // For now, return success
-    return { success: true, message: 'Content flagged for review' };
+  async flagContent() {
+    // Content flagging functionality will be implemented here
+    return { message: 'Content flagging endpoint - implementation pending' };
   }
 
   @Get('content/moderation-stats')
