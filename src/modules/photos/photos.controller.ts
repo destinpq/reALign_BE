@@ -419,11 +419,22 @@ export class PhotosController {
         console.log('✅ Converted to S3 URL:', imageUrl);
       }
       
+      // Check if Replicate API token is available
+      const replicateToken = process.env.REPLICATE_API_TOKEN;
+      
+      if (!replicateToken) {
+        console.error('❌ Replicate API token not configured');
+        console.error('❌ Please set REPLICATE_API_TOKEN environment variable');
+        throw new Error('Replicate API token not configured on server. Please contact administrator.');
+      }
+
+      console.log('🔑 Using Replicate token:', replicateToken.substring(0, 10) + '...');
+
       // Call Replicate API from backend to avoid CORS issues
       const response = await fetch('https://api.replicate.com/v1/predictions', {
         method: 'POST',
         headers: {
-          'Authorization': `Token ${process.env.REPLICATE_API_TOKEN}`,
+          'Authorization': `Token ${replicateToken}`,
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
@@ -451,7 +462,7 @@ export class PhotosController {
       while (attempts < maxAttempts) {
         const statusResponse = await fetch(`https://api.replicate.com/v1/predictions/${prediction.id}`, {
           headers: {
-            'Authorization': `Token ${process.env.REPLICATE_API_TOKEN}`,
+            'Authorization': `Token ${replicateToken}`,
           }
         });
 
