@@ -31,9 +31,6 @@ import {
 import { UserRole } from '@prisma/client';
 
 @ApiTags('Admin')
-@ApiBearerAuth()
-@UseGuards(JwtAuthGuard, RolesGuard)
-@Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN)
 @Controller('admin')
 export class AdminController {
   constructor(
@@ -42,6 +39,27 @@ export class AdminController {
     private readonly userAnalyticsService: UserAnalyticsService,
   ) {}
 
+  // ==================== PUBLIC ENDPOINTS ====================
+
+  @Get('stats/public')
+  @ApiOperation({ summary: 'Get public statistics for homepage (no auth required)' })
+  @ApiResponse({ status: 200, description: 'Public stats retrieved successfully' })
+  async getPublicStats() {
+    return this.adminService.getPublicStats();
+  }
+
+  // ==================== AUTHENTICATED ADMIN ENDPOINTS ====================
+
+  @Get('dashboard')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get admin dashboard overview' })
+  @ApiResponse({ status: 200, description: 'Dashboard data retrieved successfully' })
+  async getDashboard() {
+    return this.adminService.getDashboard();
+  }
+
   @Post('create-admin')
   @Roles(UserRole.SUPER_ADMIN)
   @ApiOperation({ summary: 'Create new admin user (Super Admin only)' })
@@ -49,13 +67,6 @@ export class AdminController {
   @HttpCode(HttpStatus.CREATED)
   async createAdmin(@Body() createAdminDto: CreateAdminDto, @Request() req) {
     return this.adminService.createAdmin(createAdminDto, req.user.id);
-  }
-
-  @Get('dashboard')
-  @ApiOperation({ summary: 'Get admin dashboard metrics' })
-  @ApiResponse({ status: 200, description: 'Dashboard metrics retrieved' })
-  async getDashboard() {
-    return this.adminService.getDashboardMetrics();
   }
 
   @Get('system-stats')
