@@ -349,8 +349,6 @@ export class PhotosController {
     };
   }
 
-
-
   @Post('get-analysis')
   @UseGuards(JwtAuthGuard)
   async getExistingAnalysis(@Body() body: { imageUrl: string }) {
@@ -714,4 +712,17 @@ export class PhotosController {
        .map(item => item.trim())
        .filter(item => item && item !== 'none');
    }
+
+  @Get('test-replicate-token')
+  async testReplicateToken() {
+    const token = process.env.REPLICATE_API_TOKEN;
+    
+    return {
+      tokenConfigured: !!token,
+      tokenLength: token ? token.length : 0,
+      tokenPreview: token ? token.substring(0, 10) + '...' : 'NOT SET',
+      environment: process.env.NODE_ENV,
+      timestamp: new Date().toISOString()
+    };
+  }
 } 
