@@ -725,4 +725,87 @@ export class PhotosController {
       timestamp: new Date().toISOString()
     };
   }
+
+  // Placeholder image endpoints for development/testing
+  @Get('placeholder/:width/:height')
+  async getPlaceholderImage(
+    @Param('width') width: string,
+    @Param('height') height: string,
+    @Res() res: Response,
+    @Query('text') text?: string,
+    @Query('bg') backgroundColor?: string,
+    @Query('color') textColor?: string,
+  ) {
+    try {
+      const w = parseInt(width) || 150;
+      const h = parseInt(height) || 150;
+      const bgColor = backgroundColor || '#f0f0f0';
+      const txtColor = textColor || '#666666';
+      const displayText = text || `${w}×${h}`;
+
+      const svg = `<svg width="${w}" height="${h}" xmlns="http://www.w3.org/2000/svg">
+        <rect width="100%" height="100%" fill="${bgColor}"/>
+        <text x="50%" y="50%" font-family="Arial, sans-serif" font-size="14" fill="${txtColor}" text-anchor="middle" dy=".3em">${displayText}</text>
+      </svg>`;
+
+      res.set({
+        'Content-Type': 'image/svg+xml',
+        'Cache-Control': 'public, max-age=3600',
+      });
+
+      return res.send(svg);
+    } catch (error) {
+      return res.status(400).json({ error: 'Invalid dimensions' });
+    }
+  }
+
+  @Get('placeholder/wearable/:id')
+  async getWearablePlaceholder(
+    @Param('id') id: string,
+    @Res() res: Response,
+  ) {
+    try {
+      const svg = `<svg width="150" height="150" xmlns="http://www.w3.org/2000/svg">
+        <rect width="100%" height="100%" fill="#f8f9fa"/>
+        <circle cx="75" cy="60" r="20" fill="#dee2e6"/>
+        <rect x="55" y="85" width="40" height="30" fill="#dee2e6"/>
+        <text x="50%" y="130" font-family="Arial, sans-serif" font-size="10" fill="#6c757d" text-anchor="middle">${id}</text>
+      </svg>`;
+
+      res.set({
+        'Content-Type': 'image/svg+xml',
+        'Cache-Control': 'public, max-age=3600',
+      });
+
+      return res.send(svg);
+    } catch (error) {
+      return res.status(400).json({ error: 'Invalid wearable ID' });
+    }
+  }
+
+  @Get('placeholder/team/:name')
+  async getTeamPlaceholder(
+    @Param('name') name: string,
+    @Res() res: Response,
+  ) {
+    try {
+      const initials = name.substring(0, 2).toUpperCase();
+      const colors = ['#3498db', '#e74c3c', '#2ecc71', '#f39c12', '#9b59b6', '#1abc9c'];
+      const bgColor = colors[name.length % colors.length];
+
+      const svg = `<svg width="120" height="120" xmlns="http://www.w3.org/2000/svg">
+        <circle cx="60" cy="60" r="60" fill="${bgColor}"/>
+        <text x="50%" y="50%" font-family="Arial, sans-serif" font-size="32" fill="white" text-anchor="middle" dy=".3em">${initials}</text>
+      </svg>`;
+
+      res.set({
+        'Content-Type': 'image/svg+xml',
+        'Cache-Control': 'public, max-age=3600',
+      });
+
+      return res.send(svg);
+    } catch (error) {
+      return res.status(400).json({ error: 'Invalid name' });
+    }
+  }
 } 

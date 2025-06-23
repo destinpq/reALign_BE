@@ -5,11 +5,16 @@
   "author": "reAlign Team",
   "private": true,
   "license": "UNLICENSED",
+  "engines": {
+    "node": "18.x",
+    "npm": "9.x"
+  },
   "scripts": {
     "build": "nest build",
     "prebuild": "rimraf dist",
     "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",
     "start": "node --max-old-space-size=4096 dist/main",
+    "postinstall": "npm run db:generate",
     "start:dev": "lsof -ti:1001 | xargs kill -9 2>/dev/null || true && node -r dotenv/config --max-old-space-size=4096 node_modules/.bin/nest start --watch -- --port=1001",
     "start:debug": "node --max-old-space-size=4096 node_modules/.bin/nest start --debug --watch -- --port=1001",
     "start:prod": "node --max-old-space-size=4096 dist/main",

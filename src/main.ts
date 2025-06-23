@@ -84,7 +84,17 @@ async function bootstrap() {
     prefix: '/uploads/',
   });
 
-  // API prefix
+  // Enable trust proxy for production
+  app.set('trust proxy', 1);
+
+  // Add placeholder route mapping
+  app.use('/api/placeholder', (req, res, next) => {
+    // Redirect placeholder requests to photos controller
+    req.url = `/api/v1/photos/placeholder${req.url}`;
+    next();
+  });
+
+  // Global prefix for API routes
   app.setGlobalPrefix('api/v1');
 
   // Swagger documentation
