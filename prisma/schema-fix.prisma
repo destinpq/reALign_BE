@@ -1,0 +1,25 @@
+// Corrected AuditLog model - COPY THIS TO YOUR PRODUCTION SCHEMA
+
+// Audit Logging
+model AuditLog {
+  id              String      @id @default(cuid())
+  userId          String?
+  action          String      // e.g., "user.login", "payment.created", "headshot.generated"
+  entityType      String?     // e.g., "User", "Payment", "ProcessingJob"
+  entityId        String?
+  oldValues       Json?
+  newValues       Json?
+  metadata        Json?
+  ipAddress       String?
+  userAgent       String?
+  source          AuditSource @default(API)
+  createdAt       DateTime    @default(now())
+
+  // CORRECTED RELATIONS - Each field has a unique name
+  user          User?          @relation(fields: [userId], references: [id], onDelete: SetNull)
+  payment       Payment?       @relation(fields: [entityId], references: [id], map: "audit_logs_payment_fkey")
+  processingJob ProcessingJob? @relation(fields: [entityId], references: [id], map: "audit_logs_processing_job_fkey")
+  transaction   Transaction?   @relation(fields: [entityId], references: [id], map: "audit_logs_transaction_fkey")
+
+  @@map("audit_logs")
+} 
