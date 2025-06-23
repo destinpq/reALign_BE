@@ -45,14 +45,26 @@ async function bootstrap() {
   app.enableCors({
     origin: [
       'http://localhost:1000',
+      'http://localhost:3000',
       'https://realign.destinpq.com',
       'https://realign-api.destinpq.com',
       process.env.FRONTEND_URL,
-    ].filter(Boolean),
+      process.env.CORS_ORIGIN?.split(',') || [],
+    ].flat().filter(Boolean),
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'Accept', 'Origin', 'X-Requested-With'],
+    allowedHeaders: [
+      'Content-Type', 
+      'Authorization', 
+      'Accept', 
+      'Origin', 
+      'X-Requested-With',
+      'Access-Control-Allow-Origin',
+      'Access-Control-Allow-Headers',
+      'Access-Control-Allow-Methods',
+    ],
     exposedHeaders: ['Content-Length', 'Content-Type'],
+    optionsSuccessStatus: 200,
   });
 
   // Global validation pipe

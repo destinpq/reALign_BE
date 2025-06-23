@@ -198,6 +198,51 @@ export class PaymentsController {
     };
   }
 
+  @Post('verify-recent')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Verify recent payment',
+    description: 'Check if user has made a recent payment for avatar generation',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Recent payment verification result',
+    schema: {
+      type: 'object',
+      properties: {
+        success: { type: 'boolean' },
+        data: {
+          type: 'object',
+          properties: {
+            hasValidPayment: { type: 'boolean' },
+            paymentDetails: { type: 'object' },
+          },
+        },
+      },
+    },
+  })
+  async verifyRecentPayment(
+    @Request() req,
+    @Body() body: { amount?: number },
+  ) {
+    try {
+      const userId = req.user.id;
+      const result = await this.paymentsService.verifyRecentPayment(userId, body.amount || 199);
+      
+      return {
+        success: true,
+        data: result,
+      };
+    } catch (error) {
+      return {
+        success: false,
+        message: 'Failed to verify recent payment',
+        error: error.message,
+      };
+    }
+  }
+
   @Get('pricing')
   @ApiOperation({
     summary: 'Get pricing information',
