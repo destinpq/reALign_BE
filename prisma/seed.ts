@@ -388,7 +388,7 @@ async function seedTransactions() {
           channel: 'DIRECT',
           processedAt: new Date(),
           completedAt: new Date(),
-        },
+    },
       });
       
       console.log(`✅ Created transaction for payment: ${payment.id}`);
@@ -428,7 +428,7 @@ async function seedProcessingJobs() {
           creditsUsed: 10,
           startedAt: new Date(),
           completedAt: i === 0 ? new Date() : null,
-        },
+    },
       });
       
       console.log(`✅ Created processing job for: ${user.email}`);
@@ -453,7 +453,7 @@ async function seedAuditLogs() {
     { action: 'user.email_verified', entityType: 'User' },
     { action: 'system.backup', entityType: 'System' },
   ];
-  
+
   for (let i = 0; i < 10; i++) {
     const user = users[i % users.length];
     const event = auditEvents[i % auditEvents.length];

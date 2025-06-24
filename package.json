@@ -59,6 +59,7 @@
     "@types/bcrypt": "^5.0.2",
     "@types/compression": "^1.8.1",
     "@types/cookie-parser": "^1.4.9",
+    "@types/node-fetch": "^2.6.12",
     "@types/sharp": "^0.31.1",
     "aws-sdk": "^2.1692.0",
     "axios": "^1.6.2",
