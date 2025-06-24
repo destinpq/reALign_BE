@@ -473,6 +473,23 @@ export class PhotosService {
     }
   }
 
+  // Clear AI analysis results from database
+  async clearAnalysisResult(photoId: string): Promise<void> {
+    try {
+      await this.prismaService.photo.update({
+        where: { id: photoId },
+        data: {
+          description: null // Clear the description field that contains AI analysis
+        }
+      });
+      
+      this.logger.log(`🗑️ AI Analysis cleared for photo ${photoId}`);
+    } catch (error) {
+      this.logger.error('❌ Failed to clear AI analysis:', error);
+      throw error;
+    }
+  }
+
   // Find photo by S3 key
   async findByS3Key(s3Key: string) {
     try {

@@ -12,7 +12,7 @@ import { PaymentStatus, SubscriptionType, SubscriptionStatus } from '@prisma/cli
 export class PaymentsService {
   private readonly logger = new Logger(PaymentsService.name);
   private readonly razorpay: Razorpay;
-  private readonly webhookSecret: string;
+
 
   // Credit packages
   private readonly creditPackages = {
@@ -30,21 +30,26 @@ export class PaymentsService {
   ) {
     const keyId = this.configService.get<string>('RAZORPAY_KEY_ID');
     const keySecret = this.configService.get<string>('RAZORPAY_KEY_SECRET');
-    this.webhookSecret = this.configService.get<string>('RAZORPAY_WEBHOOK_SECRET');
 
-    if (!keyId || !keySecret || keySecret.includes('placeholder') || keySecret.includes('YOUR_')) {
-      this.logger.warn('⚠️ Razorpay credentials not properly configured - using mock mode');
-      this.logger.warn('Please set proper RAZORPAY_KEY_SECRET in environment variables');
-    } else {
-      try {
-        this.razorpay = new Razorpay({
-          key_id: keyId,
-          key_secret: keySecret,
-        });
-        this.logger.log('✅ Razorpay initialized successfully');
-      } catch (error) {
-        this.logger.error('❌ Failed to initialize Razorpay:', error);
-      }
+    if (!keyId || !keySecret) {
+      throw new Error('❌ RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET must be configured for live payments');
+    }
+
+    if (keySecret.includes('placeholder') || keySecret.includes('YOUR_')) {
+      throw new Error('❌ Invalid Razorpay key secret. Please set proper RAZORPAY_KEY_SECRET in environment variables');
+    }
+
+    try {
+      this.razorpay = new Razorpay({
+        key_id: keyId,
+        key_secret: keySecret,
+      });
+      this.logger.log('✅ Razorpay initialized successfully in LIVE mode');
+      this.logger.log(`🔑 Using Razorpay Key ID: ${keyId}`);
+      this.logger.log(`🔑 Key Secret Length: ${keySecret.length} characters`);
+    } catch (error) {
+      this.logger.error('❌ Failed to initialize Razorpay:', error);
+      throw new Error('Failed to initialize Razorpay payment gateway');
     }
   }
 
@@ -68,36 +73,23 @@ export class PaymentsService {
       }
 
       // Check if Razorpay is properly configured
-      let razorpayOrder;
       if (!this.razorpay) {
-        // Mock mode - create fake order for development
-        this.logger.warn('🔧 Using mock Razorpay order (credentials not configured)');
-        razorpayOrder = {
-          id: `order_mock_${Date.now()}`,
-          entity: 'order',
-          amount: finalAmount,
-          currency: createOrderDto.currency,
-          receipt: `order_${userId}_${Date.now()}`,
-          status: 'created',
-          notes: {
-            userId,
-            subscriptionType: createOrderDto.subscriptionType,
-            credits: creditsToAward.toString(),
-          },
-        };
-      } else {
-        // Real Razorpay order
-        razorpayOrder = await this.razorpay.orders.create({
-          amount: finalAmount,
-          currency: createOrderDto.currency,
-          receipt: `order_${userId}_${Date.now()}`,
-          notes: {
-            userId,
-            subscriptionType: createOrderDto.subscriptionType,
-            credits: creditsToAward.toString(),
-          },
-        });
+        throw new Error('Razorpay not initialized - payment gateway not available');
       }
+
+      // Create real Razorpay order
+      const razorpayOrder = await this.razorpay.orders.create({
+        amount: finalAmount,
+        currency: createOrderDto.currency,
+        receipt: `order_${userId}_${Date.now()}`,
+        notes: {
+          userId,
+          subscriptionType: createOrderDto.subscriptionType,
+          credits: creditsToAward.toString(),
+        },
+      });
+
+      this.logger.log(`✅ Live Razorpay order created: ${razorpayOrder.id} for ₹${finalAmount/100}`);
 
       // Save payment record in database
       const payment = await this.prismaService.payment.create({
@@ -147,41 +139,27 @@ export class PaymentsService {
 
   async verifyPayment(userId: string, verifyPaymentDto: VerifyPaymentDto) {
     try {
-      // Check if this is a mock payment
-      const isMockPayment = verifyPaymentDto.razorpayOrderId.includes('mock') || 
-                           verifyPaymentDto.razorpayPaymentId.includes('mock');
-
-      let isValid = true;
-      let razorpayPayment: any;
-
-      if (isMockPayment || !this.razorpay) {
-        // Mock mode - skip signature verification
-        this.logger.warn('🔧 Using mock payment verification (credentials not configured)');
-        razorpayPayment = {
-          id: verifyPaymentDto.razorpayPaymentId,
-          order_id: verifyPaymentDto.razorpayOrderId,
-          status: 'captured',
-          method: 'card',
-          amount: 10000, // Mock amount
-          currency: 'INR',
-        };
-      } else {
-        // Verify signature
-        isValid = this.verifyRazorpaySignature(
-          verifyPaymentDto.razorpayOrderId,
-          verifyPaymentDto.razorpayPaymentId,
-          verifyPaymentDto.razorpaySignature,
-        );
-
-        if (!isValid) {
-          throw new BadRequestException('Invalid payment signature');
-        }
-
-        // Fetch payment details from Razorpay
-        razorpayPayment = await this.razorpay.payments.fetch(
-          verifyPaymentDto.razorpayPaymentId,
-        );
+      if (!this.razorpay) {
+        throw new Error('Razorpay not initialized - payment verification not available');
       }
+
+      // Verify signature
+      const isValid = this.verifyRazorpaySignature(
+        verifyPaymentDto.razorpayOrderId,
+        verifyPaymentDto.razorpayPaymentId,
+        verifyPaymentDto.razorpaySignature,
+      );
+
+      if (!isValid) {
+        throw new BadRequestException('Invalid payment signature');
+      }
+
+      // Fetch payment details from Razorpay
+      const razorpayPayment = await this.razorpay.payments.fetch(
+        verifyPaymentDto.razorpayPaymentId,
+      );
+
+      this.logger.log(`✅ Live Razorpay payment verified: ${razorpayPayment.id} - ₹${Number(razorpayPayment.amount)/100}`);
 
       // Find payment record
       const payment = await this.prismaService.payment.findFirst({
@@ -199,8 +177,6 @@ export class PaymentsService {
       if (payment.status === PaymentStatus.COMPLETED) {
         throw new BadRequestException('Payment already processed');
       }
-
-
 
       // Update payment status
       const updatedPayment = await this.prismaService.payment.update({
@@ -416,50 +392,7 @@ export class PaymentsService {
     }
   }
 
-  async handleWebhook(webhookData: PaymentWebhookDto, signature: string) {
-    try {
-      // Verify webhook signature - TEMPORARILY DISABLED for debugging
-      // const isValid = this.verifyWebhookSignature(JSON.stringify(webhookData), signature);
-      
-      // if (!isValid) {
-      //   throw new BadRequestException('Invalid webhook signature');
-      // }
-      
-      this.logger.log('🔓 Webhook signature verification temporarily disabled for debugging');
 
-      const { event, payload } = webhookData;
-
-      switch (event) {
-        case 'payment.captured':
-          await this.handlePaymentCaptured(payload.payment.entity);
-          break;
-        case 'payment.failed':
-          await this.handlePaymentFailed(payload.payment.entity);
-          break;
-        case 'order.paid':
-          await this.handleOrderPaid(payload.order.entity);
-          break;
-        default:
-          this.logger.warn(`Unhandled webhook event: ${event}`);
-      }
-
-      // Log webhook event
-      await this.auditService.log({
-        action: `webhook.${event}`,
-        entityType: 'Payment',
-        source: 'WEBHOOK',
-        metadata: {
-          event,
-          payload,
-        },
-      });
-
-      return { success: true };
-    } catch (error) {
-      this.logger.error('Webhook processing failed:', error);
-      throw error;
-    }
-  }
 
   async getPaymentHistory(userId: string, page = 1, limit = 20) {
     const skip = (page - 1) * limit;
@@ -617,71 +550,9 @@ export class PaymentsService {
     return expectedSignature === signature;
   }
 
-  private verifyWebhookSignature(body: string, signature: string): boolean {
-    const expectedSignature = crypto
-      .createHmac('sha256', this.webhookSecret)
-      .update(body)
-      .digest('hex');
 
-    return expectedSignature === signature;
-  }
 
-  private async handlePaymentCaptured(paymentData: any) {
-    const payment = await this.prismaService.payment.findFirst({
-      where: { razorpayPaymentId: paymentData.id },
-      include: { user: true },
-    });
 
-    if (payment && payment.status !== PaymentStatus.COMPLETED) {
-      await this.prismaService.payment.update({
-        where: { id: payment.id },
-        data: { status: PaymentStatus.COMPLETED },
-      });
-
-      // Send confirmation email
-      await this.emailService.sendPaymentConfirmation(
-        payment.user.email,
-        {
-          paymentId: payment.id,
-          amount: Number(payment.amount),
-          credits: payment.creditsAwarded,
-          currency: payment.currency,
-        },
-      );
-    }
-  }
-
-  private async handlePaymentFailed(paymentData: any) {
-    const payment = await this.prismaService.payment.findFirst({
-      where: { razorpayPaymentId: paymentData.id },
-      include: { user: true },
-    });
-
-    if (payment) {
-      await this.prismaService.payment.update({
-        where: { id: payment.id },
-        data: {
-          status: PaymentStatus.FAILED,
-          failureReason: paymentData.error_description,
-        },
-      });
-
-      // Send failure email
-      await this.emailService.sendPaymentFailed(
-        payment.user.email,
-        {
-          paymentId: payment.id,
-          amount: Number(payment.amount),
-          reason: paymentData.error_description,
-        },
-      );
-    }
-  }
-
-  private async handleOrderPaid(orderData: any) {
-    // Handle order paid event
-    this.logger.log(`Order paid: ${orderData.id}`);
-  }
 
   private async createSubscription(userId: string, subscriptionType: SubscriptionType) {
     const creditPackage = this.creditPackages[subscriptionType];

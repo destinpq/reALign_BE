@@ -71,59 +71,5 @@ export class WebhookController {
     return { success: true, message: 'Webhook received' };
   }
 
-  @Post('razorpay/payment')
-  @HttpCode(HttpStatus.OK)
-  @ApiOperation({
-    summary: 'Razorpay payment webhook',
-    description: 'Webhook for Razorpay payment events',
-  })
-  async handleRazorpayPayment(
-    @Body() payload: any,
-    @Headers('x-razorpay-signature') signature: string,
-  ) {
-    try {
-      console.log('🎯 Razorpay webhook received:', {
-        fullPayload: payload,
-        event: payload.event,
-        paymentId: payload.payload?.payment?.entity?.id || payload.payment?.id,
-        amount: payload.payload?.payment?.entity?.amount || payload.payment?.amount,
-        status: payload.payload?.payment?.entity?.status || payload.payment?.status,
-      });
 
-      // Handle different payment events - try multiple payload structures
-      const eventType = payload.event;
-      const paymentData = payload.payload?.payment?.entity || payload.payment || payload;
-
-      switch (eventType) {
-        case 'payment.authorized':
-          console.log('💳 Payment authorized:', paymentData?.id);
-          await this.webhookService.handlePaymentAuthorized(paymentData);
-          break;
-
-        case 'payment.captured':
-          console.log('✅ Payment captured:', paymentData?.id);
-          await this.webhookService.handlePaymentCaptured(paymentData);
-          break;
-
-        case 'payment.failed':
-          console.log('❌ Payment failed:', paymentData?.id);
-          await this.webhookService.handlePaymentFailed(paymentData);
-          break;
-
-        default:
-          console.log('📝 Unhandled webhook event:', eventType);
-          
-          // If it's a test webhook, acknowledge it
-          if (!eventType || eventType === 'test' || payload.test) {
-            console.log('✅ Test webhook acknowledged');
-            return { success: true, message: 'Test webhook acknowledged' };
-          }
-      }
-
-      return { success: true, message: 'Webhook processed successfully' };
-    } catch (error) {
-      console.error('❌ Error processing Razorpay webhook:', error);
-      return { success: false, message: 'Webhook processing failed' };
-    }
-  }
 } 

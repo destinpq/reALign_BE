@@ -37,6 +37,7 @@ import { diskStorage } from 'multer';
 import { extname } from 'path';
 import { v4 as uuidv4 } from 'uuid';
 import { promises as fs } from 'fs';
+import fetch from 'node-fetch';
 
 // Multer configuration for file uploads
 const multerConfig: MulterOptions = {
@@ -399,9 +400,9 @@ export class PhotosController {
 
   @Post('analyze-image')
   @UseGuards(JwtAuthGuard)
-  async analyzeImageWithBlip3(@Body() body: { imageUrl: string }) {
+  async analyzeImageWithLLaVA(@Body() body: { imageUrl: string }) {
     try {
-      console.log('🔍 Starting BLIP-3 image analysis for:', body.imageUrl);
+      console.log('🔍 Starting LLaVA image analysis for:', body.imageUrl);
       
       // Use the imageUrl directly - it should already be a proper S3 URL from upload
       let imageUrl = body.imageUrl;
@@ -427,7 +428,22 @@ export class PhotosController {
 
       console.log('🔑 Using Replicate token:', replicateToken.substring(0, 10) + '...');
 
-      // Call Replicate API from backend to avoid CORS issues
+      // Prepare the analysis request
+      const analysisPrompt = `Analyze this person's appearance and respond in this exact format:
+
+GENDER: male
+AGE: 25
+ETHNICITY: south asian
+HAIR: black
+EYES: brown
+BODY TYPE: average
+ACCESSORIES: turban, beard
+
+Use the exact format above. Replace the example values with what you see in the image. For ACCESSORIES, list items like turban, beard, glasses, jewelry, or write "none" if no accessories.`;
+
+      console.log('🚀 Calling Replicate API directly...');
+      
+      // Make direct API call - NO TIMEOUT, just hit the URL
       const response = await fetch('https://api.replicate.com/v1/predictions', {
         method: 'POST',
         headers: {
@@ -435,115 +451,101 @@ export class PhotosController {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          version: "72044dfaaa18e83ebee21d2161efe40f59303b5a087b8680aca809e5e53481d8",
+          version: "80537f9eead1a5bfa72d5ac6ea6414379be41d4d4f6679fd776e9535d1eb58bb",
           input: {
-            image: imageUrl, // Use the converted S3 URL
-            query: "ANALYZE THIS PERSON COMPLETELY: 1) GENDER: Is this person male or female? 2) AGE: What is their approximate age in years? 3) ETHNICITY: What is their ethnicity/race (South Asian, Indian, Sikh, Punjabi, Asian, African, Hispanic, Caucasian, Middle Eastern)? 4) HAIR: What color is their hair? Is it covered by a turban or head covering? 5) EYES: What color are their eyes? 6) BODY TYPE: Are they slim, average, athletic, or heavy? 7) ACCESSORIES: List ALL accessories - turban, patka, beard, mustache, glasses, earrings, necklace, jewelry, religious items. Be EXTREMELY specific about Sikh religious items like turbans, patkas, or kara bracelets."
+            image: imageUrl,
+            prompt: analysisPrompt,
+            max_tokens: 200,
+            temperature: 0.1,
+            top_p: 1
           }
         })
       });
 
       if (!response.ok) {
-        const errorText = await response.text();
-        console.error(`❌ Replicate API ${response.status} error:`, errorText);
-        throw new Error(`Replicate API error: ${response.status} - ${errorText}`);
+        throw new Error(`Replicate API error: ${response.status} ${response.statusText}`);
       }
 
       const prediction = await response.json();
-      console.log('🤖 BLIP-3 prediction started:', prediction.id);
+      console.log('🎯 Prediction created:', prediction.id);
 
-      // Poll for results with better logging
-      const maxAttempts = 60; // 60 seconds timeout (BLIP-3 can be slow)
-      let attempts = 0;
+      // Simple polling - wait for result
+      const analysisResult = await this.pollReplicateResult(prediction.id, replicateToken);
+
+      console.log('✅ LLaVA Raw Response:', analysisResult);
       
-      while (attempts < maxAttempts) {
-        const statusResponse = await fetch(`https://api.replicate.com/v1/predictions/${prediction.id}`, {
-          headers: {
-            'Authorization': `Token ${replicateToken}`,
-          }
-        });
-
-        if (!statusResponse.ok) {
-          throw new Error(`Status check failed: ${statusResponse.status}`);
-        }
-
-        const status = await statusResponse.json();
-        console.log(`🔄 BLIP-3 status check ${attempts + 1}/60: ${status.status}`);
-        
-        if (status.status === 'succeeded') {
-          console.log('✅ BLIP-3 analysis completed:', status.output);
-          
-          // Parse the output to extract structured data
-          const description = status.output || '';
-          const analysis = this.parseBlipDescription(description);
-          
-          // STORE ANALYSIS IN DATABASE - Using photosService method
-          try {
-            await this.photosService.storeAnalysisResult(imageUrl, analysis);
-            console.log('💾 Analysis stored in database successfully');
-          } catch (dbError) {
-            console.error('❌ Failed to store analysis in DB:', dbError);
-          }
-          
-          return {
-            success: true,
-            data: analysis
-          };
-        }
-        
-        if (status.status === 'failed') {
-          console.error('❌ BLIP-3 analysis failed:', status.error);
-          throw new Error(`BLIP-3 analysis failed: ${status.error || 'Unknown error'}`);
-        }
-        
-        // Wait 2 seconds before next check (give it more time)
-        await new Promise(resolve => setTimeout(resolve, 2000));
-        attempts++;
+      // Parse the structured response
+      const parsedData = this.parseBlipDescription(analysisResult);
+      
+      // Validate the parsed data before storing
+      const isValidAnalysis = parsedData.gender && parsedData.age && parsedData.ethnicity;
+      
+      if (!isValidAnalysis) {
+        console.error('❌ Analysis parsing failed - invalid response format');
+        console.error('❌ Expected structured format but got:', analysisResult);
+        throw new Error('Analysis failed: AI returned invalid format. Please try again.');
       }
       
-      console.error('❌ BLIP-3 analysis timeout after 60 seconds');
-      throw new Error('Analysis timeout - BLIP-3 is taking longer than expected');
+      // Store the analysis in database
+      try {
+        await this.photosService.storeAnalysisResult(imageUrl, parsedData);
+        console.log('💾 Analysis stored in database successfully');
+      } catch (dbError) {
+        console.error('❌ Failed to store analysis in DB:', dbError);
+      }
+      
+      return {
+        success: true,
+        data: parsedData
+      };
       
     } catch (error) {
-      console.error('❌ BLIP-3 analysis error:', error);
+      console.error('❌ LLaVA analysis error:', error);
+      
       return {
         success: false,
-        error: error.message,
-        data: {
-          gender: '',
-          age: '',
-          ethnicity: '',
-          hairColor: '',
-          eyeColor: '',
-          accessories: '',
-          bodyType: '',
-          description: 'Analysis failed'
-        }
+        error: error.message || 'Analysis failed',
+        data: null
       };
     }
   }
 
-  private parseBlipDescription(description: string): any {
-    // Parse the structured BLIP-3 response based on our specific prompt format
-    console.log('🔍 RAW BLIP-3 OUTPUT:', description);
-    console.log('🔍 RAW OUTPUT LENGTH:', description.length);
+  private parseBlipDescription(description: any): any {
+    // Parse the structured LLaVA response based on our specific prompt format
+    console.log('🔍 RAW LLaVA OUTPUT:', description);
+    console.log('🔍 RAW OUTPUT TYPE:', typeof description);
+    
+    // Convert to string if it's not already
+    let textDescription: string;
+    if (typeof description === 'string') {
+      textDescription = description;
+    } else if (Array.isArray(description)) {
+      textDescription = description.join(' ');
+    } else if (description && typeof description === 'object') {
+      textDescription = JSON.stringify(description);
+    } else {
+      textDescription = String(description);
+    }
+    
+    console.log('🔍 CONVERTED TO STRING:', textDescription);
+    console.log('🔍 STRING LENGTH:', textDescription.length);
     
     // Extract accessories as string first
-    const accessoriesString = this.extractStructuredAccessories(description);
+    const accessoriesString = this.extractStructuredAccessories(textDescription);
     
     // 🔥 FIX: Convert accessories to array for avatar generation
     const accessoriesArray = this.parseAccessoriesToArray(accessoriesString);
 
     const result = {
-      gender: this.extractStructuredValue(description, 'GENDER', ['male', 'female']),
-      age: this.extractStructuredAge(description),
-      ethnicity: this.extractStructuredValue(description, 'ETHNICITY', ['sikh', 'punjabi', 'indian', 'south asian', 'asian', 'african', 'black', 'hispanic', 'caucasian', 'white', 'middle eastern', 'arab']),
-      hairColor: this.extractStructuredValue(description, 'HAIR', ['black', 'brown', 'blonde', 'red', 'gray', 'grey', 'white', 'silver', 'dark brown', 'light brown', 'covered', 'turban']),
-      eyeColor: this.extractStructuredValue(description, 'EYES', ['brown', 'blue', 'green', 'hazel', 'dark', 'dark brown', 'light brown', 'amber']),
+      gender: this.extractStructuredValue(textDescription, 'GENDER', ['male', 'female']),
+      age: this.extractStructuredAge(textDescription),
+      ethnicity: this.extractStructuredValue(textDescription, 'ETHNICITY', ['sikh', 'punjabi', 'indian', 'south asian', 'asian', 'african', 'black', 'hispanic', 'caucasian', 'white', 'middle eastern', 'arab']),
+      hairColor: this.extractStructuredValue(textDescription, 'HAIR', ['black', 'brown', 'blonde', 'red', 'gray', 'grey', 'white', 'silver', 'dark brown', 'light brown', 'covered', 'turban']),
+      eyeColor: this.extractStructuredValue(textDescription, 'EYES', ['brown', 'blue', 'green', 'hazel', 'dark', 'dark brown', 'light brown', 'amber']),
       accessories: accessoriesString, // Keep original for display
       accessoriesArray: accessoriesArray, // Array for avatar generation
-      bodyType: this.extractStructuredValue(description, 'BODY TYPE', ['slim', 'thin', 'athletic', 'fit', 'average', 'curvy', 'heavy', 'large']),
-      description: description
+      bodyType: this.extractStructuredValue(textDescription, 'BODY TYPE', ['slim', 'thin', 'athletic', 'fit', 'average', 'curvy', 'heavy', 'large']),
+      description: textDescription
     };
 
     console.log('🎯 PARSED RESULT:');
@@ -687,15 +689,24 @@ export class PhotosController {
    }
 
    private extractStructuredAccessories(text: string): string {
-     // Look for accessories section
-     const accessoriesRegex = /ACCESSORIES[:\s]*([^\\n]+)/i;
+     console.log('🔍 Extracting accessories from text:', text);
+     
+     // Look for accessories section - fix the regex to handle newlines properly
+     const accessoriesRegex = /ACCESSORIES[:\s]*([^\n]+)/i;
      const accessoriesMatch = text.match(accessoriesRegex);
      
      let searchText = text;
      if (accessoriesMatch) {
-       searchText = accessoriesMatch[1];
+       searchText = accessoriesMatch[1].trim();
+       console.log('✅ Found accessories section:', searchText);
+       
+       // If the section already contains comma-separated accessories, return them directly
+       if (searchText.includes(',') || searchText.includes('turban') || searchText.includes('beard')) {
+         return searchText;
+       }
      }
      
+     console.log('🔍 Using fallback extraction on:', searchText);
      return this.extractAccessories(searchText);
    }
 
@@ -805,6 +816,91 @@ export class PhotosController {
       return res.send(svg);
     } catch (error) {
       return res.status(400).json({ error: 'Invalid name' });
+    }
+  }
+
+  private async pollReplicateResult(predictionId: string, token: string): Promise<string> {
+    const maxAttempts = 60; // 60 attempts over 60 seconds
+    const pollInterval = 1000; // 1 second between polls
+    
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      console.log(`🔄 Checking result... ${attempt}s`);
+      
+      // Simple fetch without timeout - just hit the URL
+      const response = await fetch(`https://api.replicate.com/v1/predictions/${predictionId}`, {
+        headers: {
+          'Authorization': `Token ${token}`,
+          'Content-Type': 'application/json',
+        }
+      });
+
+      if (!response.ok) {
+        throw new Error(`Poll failed: ${response.status}`);
+      }
+
+      const result = await response.json();
+
+      if (result.status === 'succeeded') {
+        console.log('✅ Analysis completed!');
+        return result.output;
+      }
+
+      if (result.status === 'failed') {
+        throw new Error(`Analysis failed: ${result.error || 'Unknown error'}`);
+      }
+
+      if (result.status === 'canceled') {
+        throw new Error('Analysis was canceled');
+      }
+
+      // Wait 1 second before next check
+      await new Promise(resolve => setTimeout(resolve, pollInterval));
+    }
+
+    throw new Error('Analysis timed out after 60 seconds');
+  }
+
+  @Post('clear-analysis')
+  @UseGuards(JwtAuthGuard)
+  async clearAnalysisData(@Body() body: { imageUrl: string }) {
+    try {
+      console.log('🗑️ Clearing AI analysis for:', body.imageUrl);
+      
+      // Extract S3 key from URL
+      const s3Key = body.imageUrl.includes('uploads/') ? 
+        body.imageUrl.split('uploads/')[1].split('?')[0] : 
+        null;
+      
+      if (!s3Key) {
+        console.log('❌ Could not extract S3 key from URL');
+        return { success: false, message: 'Invalid image URL' };
+      }
+      
+      // Use PhotosService to find photo by S3 key pattern
+      const photo = await this.photosService.findByS3Key(s3Key);
+      
+      if (photo && photo.description && photo.description.includes('AI_ANALYSIS:')) {
+        // Clear the AI analysis from description
+        await this.photosService.clearAnalysisResult(photo.id);
+        console.log('✅ AI analysis cleared for photo:', photo.id);
+        
+        return {
+          success: true,
+          message: 'AI analysis cleared successfully'
+        };
+      }
+      
+      console.log('❌ No AI analysis found to clear');
+      return {
+        success: false,
+        message: 'No AI analysis found for this image'
+      };
+    } catch (error) {
+      console.error('❌ Error clearing AI analysis:', error);
+      return {
+        success: false,
+        error: error.message
+      };
     }
   }
 } 

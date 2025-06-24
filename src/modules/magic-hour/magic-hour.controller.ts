@@ -13,6 +13,7 @@ import {
   UploadedFile,
   UseInterceptors,
   Query,
+  BadRequestException,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -1313,115 +1314,10 @@ export class MagicHourController {
     }
   }
 
-  @Post('generate-avatar-with-prompt')
-  @HttpCode(HttpStatus.ACCEPTED)
-  @ApiOperation({
-    summary: 'Generate AI avatar with custom prompt - AUTHENTICATED',
-    description: 'Generate a custom AI avatar using Magic Hour API with a custom prompt. Requires authentication and payment verification.',
-  })
-  @ApiResponse({
-    status: 202,
-    description: 'Avatar generation started successfully',
-  })
-  @ApiResponse({
-    status: 400,
-    description: 'Invalid request parameters',
-  })
-  @ApiResponse({
-    status: 401,
-    description: 'Authentication required',
-  })
-  @ApiBearerAuth()
-  @ApiBody({
-    schema: {
-      type: 'object',
-      properties: {
-        image_url: {
-          type: 'string',
-          description: 'URL of the source image',
-          example: 'https://realign-api.destinpq.com/api/v1/photos/cmcGpzzjg0N0Sz2ndBby56f1z/view'
-        },
-        prompt: {
-          type: 'string',
-          description: 'Custom prompt for avatar generation',
-          example: 'Professional portrait of handsome male with black hair and brown eyes wearing blue suit in a modern urban cityscape with skyscrapers. Casual style, professional photography, high quality, studio lighting, sharp focus, detailed, photorealistic'
-        },
-        name: {
-          type: 'string',
-          description: 'Name for the generation job',
-          example: 'Custom Avatar Generation'
-        }
-      },
-      required: ['image_url', 'prompt']
-    }
-  })
-  async generateAvatarWithPrompt(
-    @Request() req,
-    @Body('image_url') imageUrl: string,
-    @Body('prompt') prompt: string,
-    @Body('name') name: string = 'Custom Avatar Generation'
-  ) {
-    try {
-      console.log('🎯 Generating avatar with custom prompt for user:', req.user.id);
-      console.log('📸 Image URL:', imageUrl);
-      console.log('✨ Prompt:', prompt);
-      console.log('📝 Name:', name);
-
-      // Call the authenticated Magic Hour avatar generation method with payment check
-      const result = await this.magicHourService.generateDirectMagicHourAvatarWithPaymentCheck(
-        req.user.id,
-        imageUrl,
-        prompt,
-        name
-      );
-
-      console.log('✅ Magic Hour API response:', result);
-
-      return {
-        success: true,
-        message: 'Avatar generation started successfully',
-        data: result
-      };
-    } catch (error) {
-      console.error('❌ Avatar generation failed:', error);
-      return {
-        success: false,
-        message: 'Avatar generation failed',
-        error: error.message
-      };
-    }
-  }
-
-  @Get('generation/:generationId/status')
+  @Get('history')
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
-  @ApiOperation({ summary: 'Check Magic Hour generation status and get result' })
-  async checkGenerationStatus(
-    @Request() req,
-    @Param('generationId') generationId: string
-  ) {
-    try {
-      console.log('🔍 Checking generation status for:', generationId);
-      
-      const result = await this.magicHourService.checkGenerationStatus(generationId);
-      
-      return {
-        success: true,
-        data: result
-      };
-    } catch (error) {
-      console.error('❌ Status check failed:', error);
-      return {
-        success: false,
-        error: error.message
-      };
-    }
-  }
-
-  @Get('user/history')
-  @UseGuards(JwtAuthGuard)
-  @ApiBearerAuth()
-  @ApiOperation({ summary: 'Get user avatar generation history' })
+  @ApiOperation({ summary: 'Get avatar generation history' })
   async getUserAvatarHistory(
     @Request() req,
     @Query('page') page: string = '1',

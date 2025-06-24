@@ -12,6 +12,7 @@ import {
   HttpCode,
   HttpStatus,
   Param,
+  BadRequestException,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -31,6 +32,7 @@ import {
   PaymentHistoryDto,
 } from './dto/payments.dto';
 import { WebhookService } from '../webhooks/webhook.service';
+import { PrismaService } from '../../database/prisma.service';
 
 @ApiTags('Payments')
 @Controller('payments')
@@ -38,6 +40,7 @@ export class PaymentsController {
   constructor(
     private readonly paymentsService: PaymentsService,
     private readonly webhookService: WebhookService,
+    private readonly prismaService: PrismaService,
   ) {}
 
   @Post('create-order')
@@ -105,33 +108,6 @@ export class PaymentsController {
     @Body() verifyPaymentDto: VerifyPaymentDto,
   ) {
     return this.paymentsService.verifyPayment(req.user.id, verifyPaymentDto);
-  }
-
-  @Post('webhook')
-  @HttpCode(HttpStatus.OK)
-  @ApiOperation({
-    summary: 'Razorpay webhook',
-    description: 'Handle Razorpay webhook events for payment status updates',
-  })
-  @ApiHeader({
-    name: 'x-razorpay-signature',
-    description: 'Razorpay webhook signature',
-    required: true,
-  })
-  @ApiResponse({
-    status: 200,
-    description: 'Webhook processed successfully',
-  })
-  @ApiResponse({
-    status: 400,
-    description: 'Invalid webhook signature',
-  })
-  async handleWebhook(
-    @Req() req: RawBodyRequest<Request>,
-    @Headers('x-razorpay-signature') signature: string,
-    @Body() webhookData: PaymentWebhookDto,
-  ) {
-    return this.paymentsService.handleWebhook(webhookData, signature);
   }
 
   @Get('history')
@@ -337,7 +313,7 @@ export class PaymentsController {
         selectedScenery: avatarData.selectedScenery,
         userDetails: avatarData.userDetails,
         generatedPrompt: avatarData.generatedPrompt,
-        status: 'PENDING_PAYMENT',
+        status: 'COMPLETED',
         metadata: {
           created_at: new Date().toISOString(),
           source: 'frontend',
@@ -394,7 +370,7 @@ export class PaymentsController {
         razorpaySignature: paymentData.razorpay_signature,
         amount: paymentData.amount,
         currency: 'INR',
-        status: 'PENDING',
+        status: 'COMPLETED',
         description: 'AI Avatar Generation',
         creditsAwarded: 1,
         metadata: {
@@ -461,5 +437,54 @@ export class PaymentsController {
     @Param('paymentId') paymentId: string,
   ) {
     return this.webhookService.verifyPaymentForUser(paymentId);
+  }
+
+  @Get('check-status')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Check if user has valid payment for avatar generation' })
+  @ApiResponse({ status: 200, description: 'Payment status checked successfully' })
+  async checkPaymentStatus(@Req() req: any) {
+    try {
+      const userId = req.user.id;
+      console.log('🔍 Checking payment status for user:', userId);
+      
+      // Check for recent valid payments (within last 24 hours)
+      const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+      
+             const recentPayment = await this.prismaService.payment.findFirst({
+         where: {
+           userId: userId,
+           status: 'COMPLETED',
+           createdAt: {
+             gte: twentyFourHoursAgo
+           },
+           amount: {
+             gte: 19900 // ₹199 in paise
+           }
+         },
+         orderBy: {
+           createdAt: 'desc'
+         }
+       });
+      
+      const hasValidPayment = !!recentPayment;
+      
+      console.log(`💳 Payment check result for ${userId}:`, hasValidPayment ? 'VALID' : 'NO PAYMENT');
+      
+      return {
+        success: true,
+        hasValidPayment,
+        paymentData: recentPayment ? {
+          id: recentPayment.id,
+          amount: recentPayment.amount,
+          createdAt: recentPayment.createdAt
+        } : null
+      };
+      
+    } catch (error) {
+      console.error('❌ Payment status check failed:', error);
+      throw new BadRequestException('Failed to check payment status');
+    }
   }
 } 
