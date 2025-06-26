@@ -79,7 +79,7 @@ export class PaymentsController {
     @Request() req,
     @Body() createOrderDto: CreateOrderDto,
   ) {
-    return this.paymentsService.createOrder(req.users.id, createOrderDto);
+    return this.paymentsService.createOrder(req.user.id, createOrderDto);
   }
 
   @Post('verify')
@@ -109,7 +109,7 @@ export class PaymentsController {
     @Request() req,
     @Body() verifyPaymentDto: VerifyPaymentDto,
   ) {
-    return this.paymentsService.verifyPayment(req.users.id, verifyPaymentDto);
+    return this.paymentsService.verifyPayment(req.user.id, verifyPaymentDto);
   }
 
   @Get('history')

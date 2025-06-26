@@ -173,4 +173,36 @@ export class AuthController {
       });
     }
   }
+
+  @Post('debug-login')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Debug login - detailed logging' })
+  @ApiResponse({ status: 200, description: 'Debug login attempt' })
+  async debugLogin(@Body() loginDto: LoginDto): Promise<any> {
+    try {
+      console.log('🚨 DEBUG LOGIN ENDPOINT CALLED');
+      console.log('🚨 Request body:', JSON.stringify(loginDto, null, 2));
+      
+      const result = await this.authService.login(loginDto);
+      
+      console.log('🚨 DEBUG LOGIN SUCCESS');
+      return {
+        success: true,
+        message: 'Login successful',
+        hasAccessToken: !!result.accessToken,
+        hasRefreshToken: !!result.refreshToken,
+        hasUser: !!result.user,
+        userEmail: result.user?.email
+      };
+    } catch (error) {
+      console.log('🚨 DEBUG LOGIN FAILED');
+      console.error('🚨 Debug login error:', error);
+      return {
+        success: false,
+        error: error.message,
+        errorType: error.constructor.name,
+        stack: error.stack
+      };
+    }
+  }
 } 

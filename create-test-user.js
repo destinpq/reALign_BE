@@ -1,39 +1,62 @@
-
-import { PrismaClient } from '@prisma/client';
-import * as bcrypt from 'bcrypt';
-
-const prisma = new PrismaClient();
+const axios = require('axios');
 
 async function createTestUser() {
+  const API_URL = 'http://localhost:8080/api/v1'; // Based on your logs
+  
+  console.log('👤 Creating test user...');
+  
+  const testUser = {
+    email: 'testuser@realign.com',
+    password: 'TestPassword123!',
+    firstName: 'Test',
+    lastName: 'User'
+  };
+  
   try {
-    const hashedPassword = await bcrypt.hash('password123', 10);
-    
-    const user = await prisma.user.create({
-      data: {
-        email: 'test@example.com',
-        password: hashedPassword,
-        firstName: 'Test',
-        lastName: 'User',
-        username: 'testuser',
-        role: 'USER',
-        credits: 1000,
-        emailVerified: true,
-      },
+    console.log('👤 Attempting to create user:', {
+      email: testUser.email,
+      firstName: testUser.firstName,
+      lastName: testUser.lastName,
+      password: '***' // Hidden for security
     });
     
-    console.log('✅ Test user created:', user.email);
-    console.log('📧 Email: test@example.com');
-    console.log('🔑 Password: password123');
+    const response = await axios.post(`${API_URL}/auth/register`, testUser, {
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      timeout: 10000
+    });
+    
+    console.log('✅ User created successfully:', {
+      hasAccessToken: !!response.data.accessToken,
+      hasRefreshToken: !!response.data.refreshToken,
+      hasUser: !!response.data.user,
+      userEmail: response.data.user?.email,
+      userId: response.data.user?.id
+    });
+    
+    console.log('\n🎯 Test credentials for login:');
+    console.log('📧 Email:', testUser.email);
+    console.log('🔑 Password:', testUser.password);
+    
   } catch (error) {
-    if (error.code === 'P2002') {
-      console.log('ℹ️ Test user already exists');
-    } else {
-      console.error('❌ Error:', error.message);
+    console.error('❌ User creation failed:');
+    console.error('❌ Error type:', error.constructor.name);
+    console.error('❌ Error message:', error.message);
+    
+    if (error.response) {
+      console.error('❌ Response status:', error.response.status);
+      console.error('❌ Response data:', error.response.data);
+      
+      if (error.response.status === 409) {
+        console.log('\n💡 User already exists - you can use these credentials for login testing:');
+        console.log('📧 Email:', testUser.email);
+        console.log('🔑 Password:', testUser.password);
+      }
+    } else if (error.request) {
+      console.error('❌ No response received');
     }
-  } finally {
-    await prisma.$disconnect();
   }
 }
 
-createTestUser();
-
+createTestUser(); 
