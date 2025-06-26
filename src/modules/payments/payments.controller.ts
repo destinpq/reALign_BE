@@ -513,4 +513,132 @@ export class PaymentsController {
       throw new BadRequestException('Failed to check payment status');
     }
   }
+
+  @Post('webhook/razorpay')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Razorpay webhook handler',
+    description: 'Handle Razorpay payment webhook events to prevent automatic refunds',
+  })
+  async handleRazorpayWebhook(
+    @Body() payload: any,
+    @Headers('x-razorpay-signature') signature: string,
+  ) {
+    try {
+      console.log('🔔 Razorpay webhook received:', payload.event);
+      
+      // Verify webhook signature
+      const isValid = await this.webhookService.verifyRazorpaySignature(
+        JSON.stringify(payload),
+        signature
+      );
+      
+      if (!isValid) {
+        console.error('❌ Invalid Razorpay webhook signature');
+        return { success: false, message: 'Invalid signature' };
+      }
+      
+      // Handle different payment events
+      switch (payload.event) {
+        case 'payment.captured':
+          console.log('✅ Payment captured successfully:', payload.payload.payment.entity.id);
+          // Payment is successful - no action needed
+          break;
+          
+        case 'payment.failed':
+          console.log('❌ Payment failed:', payload.payload.payment.entity.id);
+          // Payment failed - update status in database
+          await this.handleFailedPayment(payload.payload.payment.entity);
+          break;
+          
+        case 'payment.authorized':
+          console.log('🔐 Payment authorized:', payload.payload.payment.entity.id);
+          // Payment authorized but not captured yet
+          break;
+          
+        case 'order.paid':
+          console.log('💰 Order paid:', payload.payload.order.entity.id);
+          // Order is fully paid
+          break;
+          
+        case 'refund.created':
+          console.log('🔄 Refund created:', payload.payload.refund.entity.id);
+          // Handle refund creation - this might be the issue!
+          await this.handleRefundCreated(payload.payload.refund.entity);
+          break;
+          
+        default:
+          console.log('ℹ️ Unhandled webhook event:', payload.event);
+      }
+      
+      return { success: true, message: 'Webhook processed' };
+      
+    } catch (error) {
+      console.error('❌ Razorpay webhook error:', error);
+      return { success: false, message: 'Webhook processing failed' };
+    }
+  }
+
+  private async handleFailedPayment(paymentData: any) {
+    try {
+      // Update payment status in database
+      await this.prismaService.payments.updateMany({
+        where: {
+          razorpayPaymentId: paymentData.id,
+        },
+        data: {
+          status: PaymentStatus.FAILED,
+          metadata: {
+            failureReason: paymentData.error_description,
+            failedAt: new Date().toISOString(),
+          },
+        },
+      });
+      
+      console.log('💾 Payment failure recorded in database');
+    } catch (error) {
+      console.error('❌ Failed to update payment status:', error);
+    }
+  }
+
+  private async handleRefundCreated(refundData: any) {
+    try {
+      console.log('🚨 REFUND ALERT - Investigating refund:', refundData);
+      
+      // Find the original payment
+      const payment = await this.prismaService.payments.findFirst({
+        where: {
+          razorpayPaymentId: refundData.payment_id,
+        },
+      });
+      
+      if (payment) {
+        console.log('🔍 Original payment found:', payment.id);
+        console.log('💰 Original amount:', payment.amount);
+        console.log('🔄 Refund amount:', refundData.amount / 100);
+        
+        // Log this refund for investigation
+        await this.prismaService.payments.update({
+          where: { id: payment.id },
+          data: {
+            metadata: {
+              ...(payment.metadata as any),
+              refundAlert: {
+                refundId: refundData.id,
+                refundAmount: refundData.amount / 100,
+                refundReason: refundData.notes?.reason || 'Unknown',
+                refundedAt: new Date().toISOString(),
+                investigationRequired: true,
+              },
+            },
+          },
+        });
+        
+        console.log('🚨 REFUND LOGGED FOR INVESTIGATION');
+      }
+      
+    } catch (error) {
+      console.error('❌ Failed to handle refund:', error);
+    }
+  }
 } 
