@@ -22,10 +22,24 @@ export class PaymentVerificationService {
     const keyId = this.configService.get<string>('RAZORPAY_KEY_ID');
     const keySecret = this.configService.get<string>('RAZORPAY_KEY_SECRET');
 
-    this.razorpay = new Razorpay({
-      key_id: keyId,
-      key_secret: keySecret,
-    });
+    if (!keyId || !keySecret) {
+      throw new Error('❌ RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET must be configured for live payments');
+    }
+
+    if (keySecret.includes('placeholder') || keySecret.includes('YOUR_')) {
+      throw new Error('❌ Invalid Razorpay key secret. Please set proper RAZORPAY_KEY_SECRET in environment variables');
+    }
+
+    try {
+      this.razorpay = new Razorpay({
+        key_id: keyId,
+        key_secret: keySecret,
+      });
+      this.logger.log('✅ Razorpay initialized successfully in PaymentVerificationService');
+    } catch (error) {
+      this.logger.error('❌ Failed to initialize Razorpay:', error);
+      throw new Error('Failed to initialize Razorpay payment gateway');
+    }
   }
 
   async verifyPayment(userId: string, verifyPaymentDto: VerifyPaymentDto) {

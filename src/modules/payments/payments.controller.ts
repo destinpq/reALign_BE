@@ -357,7 +357,7 @@ export class PaymentsController {
   ) {
     try {
       // 🔥 VERIFY USER IS LOGGED IN FIRST!
-      if (!req.user || !req.users.id) {
+      if (!req.users || !req.users.id) {
         throw new Error('User not authenticated. Please log in first.');
       }
 
@@ -448,9 +448,14 @@ export class PaymentsController {
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Check if user has valid payment for avatar generation' })
   @ApiResponse({ status: 200, description: 'Payment status checked successfully' })
-  @Get('check-status')
   async checkPaymentStatus(@Req() req: any) {
     try {
+      // Check if user is properly authenticated
+      if (!req.users || !req.users.id) {
+        console.error('❌ User not authenticated - req.users is undefined');
+        throw new BadRequestException('User not authenticated. Please log in again.');
+      }
+
       const userId = req.users.id;
       console.log('🔍 Checking payment status for user:', userId);
       
@@ -458,24 +463,24 @@ export class PaymentsController {
       // This ensures user must make a fresh payment for each avatar generation
       const tenMinutesAgo = new Date(Date.now() - 10 * 60 * 1000);
       
-             const recentPayment = await this.prismaService.payments.findFirst({
-         where: {
-           userId: userId,
-           status: PaymentStatus.COMPLETED,
-           createdAt: {
+      const recentPayment = await this.prismaService.payments.findFirst({
+        where: {
+          userId: userId,
+          status: PaymentStatus.COMPLETED,
+          createdAt: {
             gte: tenMinutesAgo // Only last 10 minutes
-           },
-           amount: {
-             gte: 19900 // ₹199 in paise
+          },
+          amount: {
+            gte: 19900 // ₹199 in paise
           },
           description: {
             contains: 'AI Avatar Generation' // Must be specifically for avatar generation
-           }
-         },
-         orderBy: {
-           createdAt: 'desc'
-         }
-       });
+          }
+        },
+        orderBy: {
+          createdAt: 'desc'
+        }
+      });
       
       const hasValidPayment = !!recentPayment;
       
@@ -488,7 +493,7 @@ export class PaymentsController {
         success: true,
         hasValidPayment,
         paymentData: recentPayment ? {
-          
+          id: recentPayment.id,
           amount: recentPayment.amount,
           createdAt: recentPayment.createdAt,
           description: recentPayment.description
