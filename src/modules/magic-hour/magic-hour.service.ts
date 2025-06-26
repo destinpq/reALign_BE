@@ -120,29 +120,35 @@ export class MagicHourService {
     }
 
     try {
-      console.log('🔗 Calling Magic Hour API...');
+      console.log('🔗 Calling REAL Magic Hour API endpoint...');
       
-      // Magic Hour API call (replace with actual API endpoint)
-      const response = await fetch('https://api.magichour.ai/v1/generate', {
+      // CORRECT Magic Hour API endpoint from documentation
+      const response = await fetch('https://api.magichour.ai/v1/ai-headshot-generator', {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${this.magicHourApiKey}`,
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          image_url: imageUrl,
-          prompt: prompt,
-          style: 'professional_avatar',
-          quality: 'high',
+          name: 'AI Headshot Image',
+          style: {
+            prompt: `professional passport photo, business attire, ${prompt}`
+          },
+          assets: {
+            image_file_path: imageUrl
+          }
         }),
       });
 
       if (!response.ok) {
-        throw new Error(`Magic Hour API error: ${response.status}`);
+        console.error(`❌ Magic Hour API error: ${response.status} ${response.statusText}`);
+        const errorText = await response.text();
+        console.error('Response body:', errorText);
+        throw new Error(`Magic Hour API error: ${response.status} - ${errorText}`);
       }
 
       const result = await response.json();
-      console.log('✅ Magic Hour API response received');
+      console.log('✅ Magic Hour API response received:', result);
       
       return result;
       
