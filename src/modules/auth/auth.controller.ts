@@ -84,7 +84,7 @@ export class AuthController {
     @Body() changePasswordDto: ChangePasswordDto,
   ): Promise<{ message: string }> {
     await this.authService.changePassword(
-      req.users.id,
+      req.user.id,
       changePasswordDto.currentPassword,
       changePasswordDto.newPassword,
     );

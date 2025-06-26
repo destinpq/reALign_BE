@@ -100,7 +100,7 @@ export class WearablesController {
     description: 'User selections retrieved successfully',
   })
   async getUserSelections(@Request() req) {
-    return this.wearablesService.getUserSelections(req.users.userId);
+    return this.wearablesService.getUserSelections(req.user.id);
   }
 
   @Post('user/selections')
@@ -118,7 +118,7 @@ export class WearablesController {
     @Request() req,
     @Body() body: { wearableIds: string[] },
   ) {
-    return this.wearablesService.updateUserSelections(req.users.userId, body.wearableIds);
+    return this.wearablesService.updateUserSelections(req.user.id, body.wearableIds);
   }
 
   @Get(':id')

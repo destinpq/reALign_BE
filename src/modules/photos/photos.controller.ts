@@ -108,7 +108,7 @@ export class PhotosController {
     @UploadedFile() file: Express.Multer.File,
     @Body() createPhotoDto: CreatePhotoDto,
   ) {
-    return this.photosService.upload(req.users.userId, file, createPhotoDto);
+    return this.photosService.upload(req.user.id, file, createPhotoDto);
   }
 
   // Public upload endpoint for avatar generation (no auth required)
@@ -223,7 +223,7 @@ export class PhotosController {
     @Query('page') page?: number,
     @Query('limit') limit?: number,
   ) {
-    return this.photosService.findAll(req.users.userId, page, limit);
+    return this.photosService.findAll(req.user.id, page, limit);
   }
 
   @Get(':id')
@@ -233,7 +233,7 @@ export class PhotosController {
   @ApiResponse({ status: 200, description: 'Photo retrieved successfully' })
   @ApiResponse({ status: 404, description: 'Photo not found' })
   async findOne(@Request() req, @Param("id") id: string) {
-    return this.photosService.findOne(req.users.userId, id);
+    return this.photosService.findOne(req.user.id, id);
   }
 
   @Get(':id/url')
@@ -243,7 +243,7 @@ export class PhotosController {
   @ApiResponse({ status: 200, description: 'Signed URL generated successfully' })
   @ApiResponse({ status: 404, description: 'Photo not found' })
   async getSignedUrl(@Request() req, @Param("id") id: string) {
-    const url = await this.photosService.getSignedUrl(req.users.userId, id);
+    const url = await this.photosService.getSignedUrl(req.user.id, id);
     return { url };
   }
 
@@ -258,7 +258,7 @@ export class PhotosController {
     @Param('id') id: string,
     @Body() updatePhotoDto: UpdatePhotoDto,
   ) {
-    return this.photosService.update(req.users.userId, id, updatePhotoDto);
+    return this.photosService.update(req.user.id, id, updatePhotoDto);
   }
 
   @Delete(':id')
@@ -268,7 +268,7 @@ export class PhotosController {
   @ApiResponse({ status: 200, description: 'Photo deleted successfully' })
   @ApiResponse({ status: 404, description: 'Photo not found' })
   async remove(@Request() req, @Param("id") id: string) {
-    return this.photosService.remove(req.users.userId, id);
+    return this.photosService.remove(req.user.id, id);
   }
 
   // Public endpoint - Show uploaded image as actual image (no auth required for public uploads)
@@ -334,7 +334,7 @@ export class PhotosController {
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
   async debugList(@Req() req: any) {
-    const result = await this.photosService.findAll(req.users.id, 1, 50);
+    const result = await this.photosService.findAll(req.user.id, 1, 50);
     
     return {
       ...result,
@@ -931,12 +931,12 @@ Use the exact format above. Replace the example values with what you see in the 
   async getMagicHourHistory(@Req() req: any) {
     try {
       // Check if user is authenticated
-      if (!req.users || !req.users.id) {
-        console.error('❌ User not authenticated - req.users is undefined');
+      if (!req.user || !req.user.id) {
+        console.error('❌ User not authenticated - req.user is undefined');
         throw new UnauthorizedException('User not authenticated. Please log in again.');
       }
 
-      const userId = req.users.id;
+      const userId = req.user.id;
       console.log('🔍 Getting Magic Hour history for user:', userId);
       
       // Get avatar generations for this user

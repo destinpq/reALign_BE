@@ -33,14 +33,14 @@ export class CustomizationsController {
     @Request() req,
     @Body() createCustomizationDto: CreateCustomizationDto,
   ) {
-    return this.customizationsService.create(req.users.userId, createCustomizationDto);
+    return this.customizationsService.create(req.user.id, createCustomizationDto);
   }
 
   @Get()
   @ApiOperation({ summary: 'Get all customizations for the current user' })
   @ApiResponse({ status: 200, description: 'Customizations retrieved successfully' })
   async findAll(@Request() req) {
-    return this.customizationsService.findAll(req.users.userId);
+    return this.customizationsService.findAll(req.user.id);
   }
 
   @Get(':id')
@@ -48,7 +48,7 @@ export class CustomizationsController {
   @ApiResponse({ status: 200, description: 'Customization retrieved successfully' })
   @ApiResponse({ status: 404, description: 'Customization not found' })
   async findOne(@Request() req, @Param("id") id: string) {
-    return this.customizationsService.findOne(req.users.userId, id);
+    return this.customizationsService.findOne(req.user.id, id);
   }
 
   @Patch(':id')
@@ -60,7 +60,7 @@ export class CustomizationsController {
     @Param('id') id: string,
     @Body() updateCustomizationDto: UpdateCustomizationDto,
   ) {
-    return this.customizationsService.update(req.users.userId, id, updateCustomizationDto);
+    return this.customizationsService.update(req.user.id, id, updateCustomizationDto);
   }
 
   @Delete(':id')
@@ -68,6 +68,6 @@ export class CustomizationsController {
   @ApiResponse({ status: 200, description: 'Customization deleted successfully' })
   @ApiResponse({ status: 404, description: 'Customization not found' })
   async remove(@Request() req, @Param("id") id: string) {
-    return this.customizationsService.remove(req.users.userId, id);
+    return this.customizationsService.remove(req.user.id, id);
   }
 } 

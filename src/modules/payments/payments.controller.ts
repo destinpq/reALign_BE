@@ -144,7 +144,7 @@ export class PaymentsController {
     @Query('limit') limit?: number,
   ) {
     return this.paymentsService.getPaymentHistory(
-      req.users.id,
+      req.user.id,
       page || 1,
       limit || 20,
     );
@@ -169,7 +169,7 @@ export class PaymentsController {
     },
   })
   async getSubscriptionStatus(@Request() req) {
-    const hasValidSubscription = await this.paymentsService.hasValidSubscription(req.users.id);
+    const hasValidSubscription = await this.paymentsService.hasValidSubscription(req.user.id);
     return {
       hasValidSubscription,
       canGenerateHeadshots: hasValidSubscription,
@@ -205,7 +205,7 @@ export class PaymentsController {
     @Body() body: { amount?: number },
   ) {
     try {
-      const userId = req.users.id;
+      const userId = req.user.id;
       const result = await this.paymentsService.verifyRecentPayment(userId, body.amount || 199);
       
       return {
@@ -358,11 +358,11 @@ export class PaymentsController {
   ) {
     try {
       // 🔥 VERIFY USER IS LOGGED IN FIRST!
-      if (!req.users || !req.users.id) {
+      if (!req.user || !req.user.id) {
         throw new Error('User not authenticated. Please log in first.');
       }
 
-      const userId = req.users.id;
+      const userId = req.user.id;
       console.log(`🔐 AUTHENTICATED USER MAKING PAYMENT: ${userId}`);
 
       // Store payment data and link to avatar generation
@@ -453,12 +453,12 @@ export class PaymentsController {
   async checkPaymentStatus(@Req() req: any) {
     try {
       // Check if user is properly authenticated
-      if (!req.users || !req.users.id) {
-        console.error('❌ User not authenticated - req.users is undefined');
+      if (!req.user || !req.user.id) {
+        console.error('❌ User not authenticated - req.user is undefined');
         throw new UnauthorizedException('User not authenticated. Please log in again.');
       }
 
-      const userId = req.users.id;
+      const userId = req.user.id;
       console.log('🔍 Checking payment status for user:', userId);
       
       // 🚨 STRICT PAYMENT CHECK: Only allow payments made in the last 10 minutes
