@@ -77,22 +77,52 @@ export class PaymentsService {
         throw new Error('Razorpay not initialized - payment gateway not available');
       }
 
+      this.logger.log(`🔄 Creating Razorpay order for user: ${userId}, amount: ₹${finalAmount/100}`);
+
       // Create real Razorpay order with auto-capture enabled
-      const razorpayOrder = await this.razorpay.orders.create({
-        amount: finalAmount,
-        currency: createOrderDto.currency,
-        receipt: `order_${userId}_${Date.now()}`,
-        payment_capture: true, // Auto-capture payments to prevent refunds
-        notes: {
-          userId,
-          subscriptionType: createOrderDto.subscriptionType,
-          credits: creditsToAward.toString(),
-          auto_capture: 'true',
-          service: 'AI Avatar Generation'
-        },
-      });
+      let razorpayOrder;
+      try {
+        razorpayOrder = await this.razorpay.orders.create({
+          amount: finalAmount,
+          currency: createOrderDto.currency || 'INR',
+          receipt: `order_${userId}_${Date.now()}`,
+          payment_capture: true, // Auto-capture payments to prevent refunds
+          notes: {
+            userId,
+            subscriptionType: createOrderDto.subscriptionType || '',
+            credits: creditsToAward.toString(),
+            auto_capture: 'true',
+            service: 'AI Avatar Generation',
+            customer_id: userId,
+            order_type: 'avatar_generation'
+          },
+          // Add additional fields that might be required
+          partial_payment: false,
+        });
+      } catch (razorpayError: any) {
+        this.logger.error('❌ Razorpay order creation failed:', razorpayError);
+        this.logger.error('Error details:', {
+          message: razorpayError.message,
+          statusCode: razorpayError.statusCode,
+          error: razorpayError.error,
+          description: razorpayError.error?.description,
+          field: razorpayError.error?.field,
+        });
+        
+        // Throw a more specific error
+        if (razorpayError.statusCode === 400) {
+          throw new BadRequestException(`Razorpay validation error: ${razorpayError.error?.description || razorpayError.message}`);
+        } else if (razorpayError.statusCode === 401) {
+          throw new BadRequestException('Razorpay authentication failed - check API keys');
+        } else if (razorpayError.statusCode === 500) {
+          throw new InternalServerErrorException('Razorpay service temporarily unavailable');
+        } else {
+          throw new InternalServerErrorException(`Razorpay error: ${razorpayError.message}`);
+        }
+      }
 
       this.logger.log(`✅ Live Razorpay order created: ${razorpayOrder.id} for ₹${finalAmount/100}`);
+      this.logger.log(`🔍 Order details:`, JSON.stringify(razorpayOrder, null, 2));
 
       // Save payment record in database
       const payment = await this.prismaService.payments.create({
