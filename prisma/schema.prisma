@@ -8,7 +8,7 @@ datasource db {
 }
 
 model audit_logs {
-  id              String           @id
+  id              String           @id @default(cuid())
   userId          String?
   action          String
   entityType      String?
@@ -27,7 +27,7 @@ model audit_logs {
 }
 
 model avatar_customizations {
-  id               String              @id
+  id               String              @id @default(cuid())
   userId           String
   name             String
   primaryColor     String?
@@ -39,13 +39,13 @@ model avatar_customizations {
   status           CustomizationStatus @default(DRAFT)
   processingJobId  String?             @unique
   createdAt        DateTime            @default(now())
-  updatedAt        DateTime
+  updatedAt        DateTime         @updatedAt
   processing_jobs  processing_jobs?    @relation(fields: [processingJobId], references: [id])
   users            users               @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 model avatar_generations {
-  id                String   @id
+  id                String   @id @default(cuid())
   sessionId         String   @unique
   userImage         String
   selectedWearables Json
@@ -57,11 +57,11 @@ model avatar_generations {
   generatedImageUrl String?
   metadata          Json?
   createdAt         DateTime @default(now())
-  updatedAt         DateTime
+  updatedAt         DateTime @updatedAt
 }
 
 model email_notifications {
-  id            String      @id
+  id            String      @id @default(cuid())
   userId        String?
   to            String
   from          String
@@ -79,7 +79,7 @@ model email_notifications {
 }
 
 model payments {
-  id                String         @id
+  id                String         @id @default(cuid())
   userId            String
   subscriptionId    String?
   razorpayPaymentId String?        @unique
@@ -94,7 +94,7 @@ model payments {
   creditsAwarded    Int            @default(0)
   metadata          Json?
   createdAt         DateTime       @default(now())
-  updatedAt         DateTime
+  updatedAt         DateTime @updatedAt
   audit_logs        audit_logs[]
   subscriptions     subscriptions? @relation(fields: [subscriptionId], references: [id])
   users             users          @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -102,7 +102,7 @@ model payments {
 }
 
 model photos {
-  id               String   @id
+  id               String   @id @default(cuid())
   userId           String
   filename         String
   originalFilename String
@@ -116,12 +116,12 @@ model photos {
   isGenerated      Boolean  @default(false)
   generatedFrom    String?
   createdAt        DateTime @default(now())
-  updatedAt        DateTime
+  updatedAt        DateTime         @updatedAt
   users            users    @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 model processing_jobs {
-  id                    String                 @id
+  id                    String                 @id @default(cuid())
   userId                String
   type                  ProcessingType
   status                ProcessingStatus       @default(PENDING)
@@ -140,7 +140,7 @@ model processing_jobs {
 }
 
 model projects {
-  id          String   @id
+  id          String   @id @default(cuid())
   userId      String
   name        String
   description String?
@@ -151,18 +151,18 @@ model projects {
 }
 
 model sessions {
-  id           String   @id
+  id           String   @id @default(cuid())
   userId       String
   refreshToken String   @unique
   isValid      Boolean  @default(true)
   expiresAt    DateTime
   createdAt    DateTime @default(now())
-  updatedAt    DateTime
+  updatedAt    DateTime             @updatedAt
   users        users    @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 model subscriptions {
-  id                     String             @id
+  id                     String             @id @default(cuid())
   userId                 String
   type                   SubscriptionType
   status                 SubscriptionStatus @default(ACTIVE)
@@ -181,7 +181,7 @@ model subscriptions {
 }
 
 model transaction_analytics {
-  id                        String   @id
+  id                        String   @id @default(cuid())
   date                      DateTime @unique
   hour                      Int?
   totalTransactions         Int      @default(0)
@@ -253,7 +253,7 @@ model transaction_analytics {
 }
 
 model transaction_events {
-  id            String               @id
+  id            String               @id @default(cuid())
   transactionId String
   eventType     TransactionEventType
   status        String
@@ -274,7 +274,7 @@ model transaction_events {
 }
 
 model transaction_summaries {
-  id                      String   @id
+  id                      String   @id @default(cuid())
   userId                  String?
   period                  String
   startDate               DateTime
@@ -294,7 +294,7 @@ model transaction_summaries {
   largestTransaction      Float    @default(0)
   smallestTransaction     Float    @default(0)
   createdAt               DateTime @default(now())
-  updatedAt               DateTime
+  updatedAt               DateTime @updatedAt
   users                   users?   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([endDate])
@@ -304,7 +304,7 @@ model transaction_summaries {
 }
 
 model transactions {
-  id                  String               @id
+  id                  String               @id @default(cuid())
   transactionId       String               @unique
   type                TransactionType
   status              TransactionStatus    @default(PENDING)
@@ -384,12 +384,12 @@ model transactions {
   disputeStatus       String?
   initiatedAt         DateTime             @default(now())
   submittedAt         DateTime?
-  queuedAt            DateTime?
+  queuedAt           DateTime?
   startedAt           DateTime?
   completedAt         DateTime?
   expiredAt           DateTime?
   createdAt           DateTime             @default(now())
-  updatedAt           DateTime
+  updatedAt           DateTime             @updatedAt
   audit_logs          audit_logs[]
   transaction_events  transaction_events[]
   payments            payments?            @relation(fields: [entityId], references: [id], map: "transaction_payment_fkey")
@@ -416,7 +416,7 @@ model transactions {
 }
 
 model user_wearable_selections {
-  id             String         @id
+  id             String         @id @default(cuid())
   userId         String
   wearableItemId String
   selectedAt     DateTime       @default(now())
@@ -427,7 +427,7 @@ model user_wearable_selections {
 }
 
 model users {
-  id                       String                     @id
+  id                       String                     @id @default(cuid())
   email                    String                     @unique
   password                 String
   firstName                String?
@@ -442,7 +442,7 @@ model users {
   isActive                 Boolean                    @default(true)
   lastLoginAt              DateTime?
   createdAt                DateTime                   @default(now())
-  updatedAt                DateTime
+  updatedAt                DateTime                   @updatedAt
   audit_logs               audit_logs[]
   avatar_customizations    avatar_customizations[]
   email_notifications      email_notifications[]
@@ -459,7 +459,7 @@ model users {
 }
 
 model wearable_items {
-  id                       String                     @id
+  id                       String                     @id @default(cuid())
   name                     String
   category                 String
   subcategory              String?
@@ -478,12 +478,12 @@ model wearable_items {
   sortOrder                Int                        @default(0)
   imageMapping             Json?
   createdAt                DateTime                   @default(now())
-  updatedAt                DateTime
+  updatedAt                DateTime                   @updatedAt
   user_wearable_selections user_wearable_selections[]
 }
 
 model webhook_deliveries {
-  id                String            @id
+  id                String            @id @default(cuid())
   userId            String?
   webhookEndpointId String
   eventType         String
@@ -496,20 +496,20 @@ model webhook_deliveries {
   nextRetryAt       DateTime?
   deliveredAt       DateTime?
   createdAt         DateTime          @default(now())
-  updatedAt         DateTime
+  updatedAt         DateTime @updatedAt
   users             users?            @relation(fields: [userId], references: [id])
   webhook_endpoints webhook_endpoints @relation(fields: [webhookEndpointId], references: [id], onDelete: Cascade)
 }
 
 model webhook_endpoints {
-  id                 String               @id
+  id                 String               @id @default(cuid())
   url                String
   secret             String
   events             String[]
   isActive           Boolean              @default(true)
   description        String?
   createdAt          DateTime             @default(now())
-  updatedAt          DateTime
+  updatedAt          DateTime             @updatedAt
   webhook_deliveries webhook_deliveries[]
 }
 

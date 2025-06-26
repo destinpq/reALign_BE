@@ -41,8 +41,8 @@ export class PaymentsService {
 
     try {
       this.razorpay = new Razorpay({
-        key_id
-        key_idsecret: keySecret,
+        key_id: keyId,
+        key_secret: keySecret,
       });
       this.logger.log('✅ Razorpay initialized successfully in LIVE mode');
       this.logger.log(`🔑 Using Razorpay Key ID: ${keyId}`);

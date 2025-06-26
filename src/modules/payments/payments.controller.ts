@@ -57,7 +57,7 @@ export class PaymentsController {
     schema: {
       type: 'object',
       properties: {
-         description: 'Internal payment ID' },
+        id: { type: 'string', description: 'Internal payment ID' },
         razorpayOrderId: { type: 'string', description: 'Razorpay order ID' },
         amount: { type: 'number', description: 'Amount in paise' },
         currency: { type: 'string', description: 'Currency code' },

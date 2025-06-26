@@ -41,7 +41,7 @@ export class AuthService {
         credits: 5, // Free tier credits
       },
       select: {
-        
+        id: true,
         email: true,
         firstName: true,
         lastName: true,
@@ -56,7 +56,7 @@ export class AuthService {
 
     return {
       ...tokens,
-      user,
+      users: user,
     };
   }
 
@@ -67,7 +67,7 @@ export class AuthService {
     const user = await this.prisma.users.findUnique({
       where: { email },
       select: {
-        
+        id: true,
         email: true,
         password: true,
         firstName: true,
@@ -108,7 +108,7 @@ export class AuthService {
     const user = await this.prisma.users.findUnique({
       where: { email },
       select: {
-        
+        id: true,
         email: true,
         password: true,
         firstName: true,
@@ -130,7 +130,7 @@ export class AuthService {
     const user = await this.prisma.users.findUnique({
       where: { id: userId },
       select: {
-        
+        id: true,
         email: true,
         firstName: true,
         lastName: true,
