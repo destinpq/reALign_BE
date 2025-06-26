@@ -305,26 +305,36 @@ export class WebhookService {
     try {
       const webhookSecret = this.configService.get<string>('RAZORPAY_WEBHOOK_SECRET');
       if (!webhookSecret) {
-        this.logger.warn('⚠️ RAZORPAY_WEBHOOK_SECRET not configured - allowing webhook for development');
-        // In development, allow webhooks without signature verification
-        return true;
+        this.logger.warn('⚠️ RAZORPAY_WEBHOOK_SECRET not configured - webhook verification disabled');
+        return false; // Don't allow without proper secret
       }
 
+      // 🔧 PROPER RAZORPAY SIGNATURE VERIFICATION
+      // Razorpay sends signature in format: sha256=<hash>
+      let receivedSignature = signature;
+      if (signature && signature.startsWith('sha256=')) {
+        receivedSignature = signature.replace('sha256=', '');
+      }
+
+      // Generate expected signature using webhook secret
       const expectedSignature = crypto
         .createHmac('sha256', webhookSecret)
-        .update(payload)
+        .update(payload, 'utf8')
         .digest('hex');
 
-      const isValid = expectedSignature === signature;
+      const isValid = expectedSignature === receivedSignature;
       
       if (!isValid) {
         this.logger.error('❌ Razorpay webhook signature mismatch', {
           expected: expectedSignature,
-          received: signature,
-          payload: payload.substring(0, 100) + '...'
+          received: receivedSignature,
+          originalSignature: signature,
+          webhookSecretLength: webhookSecret.length,
+          payloadLength: payload.length,
+          payloadPreview: payload.substring(0, 100) + '...'
         });
       } else {
-        this.logger.log('✅ Razorpay webhook signature verified');
+        this.logger.log('✅ Razorpay webhook signature verified successfully');
       }
 
       return isValid;

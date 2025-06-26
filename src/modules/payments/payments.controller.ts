@@ -521,25 +521,34 @@ export class PaymentsController {
     description: 'Handle Razorpay payment webhook events to prevent automatic refunds',
   })
   async handleRazorpayWebhook(
-    @Body() payload: any,
+    @Req() req: any,
     @Headers('x-razorpay-signature') signature: string,
+    @Headers() headers: any,
   ) {
     try {
-      console.log('🔔 Razorpay webhook received:', payload.event);
+      // 🔧 GET RAW BODY FOR PROPER SIGNATURE VERIFICATION
+      const rawBody = req.rawBody ? req.rawBody.toString('utf8') : JSON.stringify(req.body);
+      const payload = req.body;
       
-      // 🚨 TEMPORARILY DISABLE SIGNATURE VERIFICATION TO STOP REFUNDS
-      console.log('⚠️ SIGNATURE VERIFICATION TEMPORARILY DISABLED TO STOP REFUNDS');
+      console.log('🔔 Razorpay webhook received:', payload?.event);
+      console.log('🔐 Signature received:', signature);
+      console.log('📝 Raw body length:', rawBody.length);
       
-      // TODO: Fix signature verification later
-      // const isValid = await this.webhookService.verifyRazorpaySignature(
-      //   JSON.stringify(payload),
-      //   signature
-      // );
+      // Verify webhook signature with raw body (required for security)
+      const isValid = await this.webhookService.verifyRazorpaySignature(rawBody, signature);
       
-      // if (!isValid) {
-      //   console.error('❌ Invalid Razorpay webhook signature');
-      //   return { success: false, message: 'Invalid signature' };
-      // }
+      if (!isValid) {
+        console.error('❌ Invalid Razorpay webhook signature');
+        console.log('🔍 Debug info:');
+        console.log('- Raw body preview:', rawBody.substring(0, 200));
+        console.log('- Signature:', signature);
+        console.log('- Content-Type:', headers['content-type']);
+        
+        // Return 400 to tell Razorpay the webhook failed
+        return { success: false, message: 'Invalid signature', error: 'SIGNATURE_MISMATCH' };
+      }
+      
+      console.log('✅ Webhook signature verified successfully');
       
       // Handle different payment events
       switch (payload.event) {
@@ -556,7 +565,8 @@ export class PaymentsController {
           
         case 'payment.authorized':
           console.log('🔐 Payment authorized:', payload.payload.payment.entity.id);
-          // Payment authorized but not captured yet
+          // Payment authorized but not captured yet - this is normal
+          console.log('ℹ️ Payment authorized, waiting for capture...');
           break;
           
         case 'order.paid':
@@ -574,11 +584,11 @@ export class PaymentsController {
           console.log('ℹ️ Unhandled webhook event:', payload.event);
       }
       
-      return { success: true, message: 'Webhook processed' };
+      return { success: true, message: 'Webhook processed successfully' };
       
     } catch (error) {
       console.error('❌ Razorpay webhook error:', error);
-      return { success: false, message: 'Webhook processing failed' };
+      return { success: false, message: 'Webhook processing failed', error: error.message };
     }
   }
 

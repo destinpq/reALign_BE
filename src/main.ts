@@ -24,6 +24,26 @@ async function bootstrap() {
   app.use(express.raw({ limit: '50mb' })); // Increase raw body limit
   app.use(express.text({ limit: '50mb' })); // Increase text body limit
 
+  // 🔧 RAW BODY MIDDLEWARE FOR WEBHOOK SIGNATURE VERIFICATION
+  // Razorpay webhook needs raw body for signature verification
+  app.use('/api/v1/payments/webhook/razorpay', (req, res, next) => {
+    // Collect raw body for signature verification
+    let rawBody = '';
+    req.on('data', chunk => {
+      rawBody += chunk;
+    });
+    req.on('end', () => {
+      req.rawBody = rawBody;
+      try {
+        req.body = JSON.parse(rawBody);
+      } catch (error) {
+        console.error('Failed to parse webhook JSON:', error);
+        req.body = {};
+      }
+      next();
+    });
+  });
+
   // Security middleware with relaxed CSP for images
   app.use(helmet({
     contentSecurityPolicy: {
