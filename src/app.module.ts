@@ -3,6 +3,7 @@ import { ConfigModule } from '@nestjs/config';
 import { ThrottlerModule } from '@nestjs/throttler';
 import { ScheduleModule } from '@nestjs/schedule';
 import { EventEmitterModule } from '@nestjs/event-emitter';
+import { APP_INTERCEPTOR } from '@nestjs/core';
 import { DatabaseModule } from './database/database.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { UsersModule } from './modules/users/users.module';
@@ -17,6 +18,7 @@ import { AuditModule } from './modules/audit/audit.module';
 import { EmailModule } from './modules/email/email.module';
 import { TransactionModule } from './modules/transactions/transaction.module';
 import { HealthModule } from './common/health/health.module';
+import { AuthLogoutInterceptor } from './guards/auth-logout.interceptor';
 
 @Module({
   imports: [
@@ -57,6 +59,12 @@ import { HealthModule } from './common/health/health.module';
     EmailModule,
     TransactionModule,
     HealthModule,
+  ],
+  providers: [
+    {
+      provide: APP_INTERCEPTOR,
+      useClass: AuthLogoutInterceptor,
+    },
   ],
 })
 export class AppModule {} 

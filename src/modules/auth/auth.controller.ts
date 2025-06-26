@@ -7,9 +7,11 @@ import {
   UseGuards, 
   Request,
   Get,
+  Res,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
 import { ThrottlerGuard } from '@nestjs/throttler';
+import { Response } from 'express';
 
 import { AuthService } from './auth.service';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
@@ -100,13 +102,75 @@ export class AuthController {
   }
 
   @Post('logout')
-  @UseGuards(JwtAuthGuard)
-  @HttpCode(HttpStatus.OK)
-  @ApiBearerAuth()
-  @ApiOperation({ summary: 'Logout user' })
-  @ApiResponse({ status: 200, description: 'User successfully logged out' })
-  async logout(): Promise<{ message: string }> {
-    // In a more sophisticated implementation, you might want to blacklist the token
-    return { message: 'Successfully logged out' };
+  @ApiOperation({ summary: 'Logout user and clear all authentication data' })
+  @ApiResponse({ status: 200, description: 'User logged out successfully' })
+  async logout(@Res() res: Response) {
+    try {
+      // Clear all possible auth cookies
+      res.clearCookie('access_token');
+      res.clearCookie('refresh_token');
+      res.clearCookie('jwt_token');
+      res.clearCookie('auth_token');
+      res.clearCookie('session');
+      res.clearCookie('connect.sid');
+      
+      // Set logout headers
+      res.setHeader('X-Auth-Logout', 'true');
+      res.setHeader('X-Auth-Reason', 'manual_logout');
+      res.setHeader('Access-Control-Expose-Headers', 'X-Auth-Logout, X-Auth-Reason');
+      
+      console.log('🚪 USER MANUALLY LOGGED OUT - ALL AUTH DATA CLEARED');
+      
+      return res.status(200).json({
+        success: true,
+        message: 'Logged out successfully',
+        logout: true,
+        timestamp: new Date().toISOString(),
+      });
+    } catch (error) {
+      console.error('❌ Logout failed:', error);
+      return res.status(500).json({
+        success: false,
+        message: 'Logout failed',
+        error: error.message,
+      });
+    }
+  }
+
+  @Post('force-logout')
+  @ApiOperation({ summary: 'Force logout due to authentication failure' })
+  @ApiResponse({ status: 401, description: 'Force logout completed' })
+  async forceLogout(@Res() res: Response) {
+    try {
+      // Clear all possible auth cookies
+      res.clearCookie('access_token');
+      res.clearCookie('refresh_token');
+      res.clearCookie('jwt_token');
+      res.clearCookie('auth_token');
+      res.clearCookie('session');
+      res.clearCookie('connect.sid');
+      
+      // Set force logout headers
+      res.setHeader('X-Auth-Logout', 'true');
+      res.setHeader('X-Auth-Reason', 'force_logout');
+      res.setHeader('Access-Control-Expose-Headers', 'X-Auth-Logout, X-Auth-Reason');
+      
+      console.log('🚨 FORCE LOGOUT EXECUTED - AUTHENTICATION FAILED');
+      
+      return res.status(401).json({
+        success: false,
+        message: 'Authentication failed. You have been forcibly logged out.',
+        logout: true,
+        force: true,
+        timestamp: new Date().toISOString(),
+      });
+    } catch (error) {
+      console.error('❌ Force logout failed:', error);
+      return res.status(500).json({
+        success: false,
+        message: 'Force logout failed',
+        error: error.message,
+      });
+    }
   }
 } 
