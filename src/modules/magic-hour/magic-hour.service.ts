@@ -239,23 +239,59 @@ export class MagicHourService {
   async getHistory(userId: string) {
     console.log('📚 Getting Magic Hour history for user:', userId);
 
-    const avatarGenerations = await this.prisma.avatar_generations.findMany({
-      where: {
-        // Filter by userId if you add a userId field to the table
-        // For now, get recent generations
-      },
-      orderBy: { createdAt: 'desc' },
-      take: 50,
-      select: {
-        id: true,
-        sessionId: true,
-        status: true,
-        generatedImageUrl: true,
-        createdAt: true,
-        metadata: true,
-      },
-    });
+    try {
+      // Try to get user-specific history from database
+      const avatarGenerations = await this.prisma.avatar_generations.findMany({
+        where: {
+          // Filter by userId in metadata since we store it there
+          metadata: {
+            path: ['userId'],
+            equals: userId,
+          },
+        },
+        orderBy: { createdAt: 'desc' },
+        take: 50,
+        select: {
+          id: true,
+          sessionId: true,
+          status: true,
+          generatedImageUrl: true,
+          userImage: true,
+          generatedPrompt: true,
+          createdAt: true,
+          metadata: true,
+        },
+      });
 
-    return avatarGenerations;
+      console.log(`✅ Found ${avatarGenerations.length} Magic Hour generations for user ${userId}`);
+      
+      // Transform the data for better frontend consumption
+      const transformedHistory = avatarGenerations.map(generation => {
+        // Type cast metadata to access properties safely
+        const metadata = generation.metadata as any;
+        
+        return {
+          id: generation.id,
+          sessionId: generation.sessionId,
+          status: generation.status,
+          originalImage: generation.userImage,
+          generatedImage: generation.generatedImageUrl,
+          prompt: generation.generatedPrompt,
+          createdAt: generation.createdAt,
+          isNewGeneration: metadata?.isNewGeneration || false,
+          magicHourJobId: metadata?.magicHourResponse?.id || null,
+          dashboardUrl: metadata?.magicHourResponse?.dashboard_url || generation.generatedImageUrl,
+          creditsCharged: metadata?.magicHourResponse?.credits_charged || 0,
+        };
+      });
+
+      return transformedHistory;
+    } catch (error) {
+      console.error('❌ Database error getting Magic Hour history:', error.message);
+      
+      // If database fails, return empty array instead of crashing
+      console.log('⚠️ Returning empty history due to database error');
+      return [];
+    }
   }
 } 

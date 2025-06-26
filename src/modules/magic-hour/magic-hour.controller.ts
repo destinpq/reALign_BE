@@ -8,19 +8,25 @@ import { MagicHourService } from './magic-hour.service';
 export class MagicHourController {
   constructor(private readonly magicHourService: MagicHourService) {}
 
-  @Post('test-api')
-  @ApiOperation({ summary: 'Test Magic Hour API without authentication' })
-  @ApiResponse({ status: 201, description: 'Test API call completed' })
-  async testMagicHourAPI(
+  @Post('direct-professional-avatar')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Generate professional avatar directly using Magic Hour AI' })
+  @ApiResponse({ status: 201, description: 'Avatar generation completed successfully' })
+  @ApiResponse({ status: 401, description: 'User not authenticated' })
+  @ApiResponse({ status: 500, description: 'Magic Hour API error or server error' })
+  async generateDirectProfessionalAvatar(
     @Body() body: { imageUrl: string; prompt: string; name: string },
+    @Request() req,
   ) {
-    console.log('🧪 TESTING Magic Hour API without authentication');
-    console.log('📸 Image URL:', body.imageUrl);
-    console.log('📝 Prompt:', body.prompt);
-    console.log('👤 Name:', body.name);
-
-    // Test with a dummy user ID
-    const userId = 'test-user-123';
+    const userId = req.user.id;
+    console.log('🎨 Magic Hour avatar generation requested for user:', userId);
+    console.log('📊 Request data:', {
+      imageUrl: body.imageUrl,
+      prompt: body.prompt,
+      name: body.name,
+      userId: userId
+    });
     
     try {
       const result = await this.magicHourService.generateDirectProfessionalAvatar(
@@ -30,71 +36,57 @@ export class MagicHourController {
         body.name,
       );
 
-      console.log('✅ Test completed successfully:', result);
+      console.log('✅ Magic Hour generation completed successfully');
       
       return {
         success: true,
         data: result,
-        message: 'Magic Hour API test completed',
+        message: 'Professional avatar generated successfully using Magic Hour AI',
         timestamp: new Date().toISOString(),
       };
     } catch (error) {
-      console.error('❌ Test failed:', error);
+      console.error('❌ Magic Hour generation failed:', error);
       
       return {
         success: false,
-        error: error.message,
-        message: 'Magic Hour API test failed',
+        error: error.message || 'Avatar generation failed',
+        message: 'Failed to generate professional avatar',
         timestamp: new Date().toISOString(),
       };
     }
   }
 
-  @Post('direct-professional-avatar')
-  @UseGuards(JwtAuthGuard)
-  @ApiBearerAuth()
-  @ApiOperation({ summary: 'Generate professional avatar directly' })
-  @ApiResponse({ status: 201, description: 'Avatar generation started successfully' })
-  @ApiResponse({ status: 401, description: 'User not authenticated' })
-  async generateDirectProfessionalAvatar(
-    @Body() body: { imageUrl: string; prompt: string; name: string },
-    @Request() req,
-  ) {
-    const userId = req.user.id;
-    console.log('🎨 Direct professional avatar generation requested for user:', userId);
-    console.log('📊 Request data:', body);
-    
-    const result = await this.magicHourService.generateDirectProfessionalAvatar(
-      userId,
-      body.imageUrl,
-      body.prompt,
-      body.name,
-    );
-
-    return {
-      success: true,
-      data: result,
-      message: 'Avatar generation completed successfully',
-    };
-  }
-
   @Get('history')
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
-  @ApiOperation({ summary: 'Get Magic Hour generation history' })
+  @ApiOperation({ summary: 'Get Magic Hour generation history for the authenticated user' })
   @ApiResponse({ status: 200, description: 'History retrieved successfully' })
+  @ApiResponse({ status: 401, description: 'User not authenticated' })
   async getHistory(@Request() req) {
     const userId = req.user.id;
     console.log('📚 Getting Magic Hour history for user:', userId);
 
-    const history = await this.magicHourService.getHistory(userId);
+    try {
+      const history = await this.magicHourService.getHistory(userId);
 
-    return {
-      success: true,
-      data: {
-        items: history,
-        total: history.length,
-      },
-    };
+      return {
+        success: true,
+        data: {
+          items: history,
+          total: history.length,
+        },
+        message: 'Magic Hour generation history retrieved successfully',
+        timestamp: new Date().toISOString(),
+      };
+    } catch (error) {
+      console.error('❌ Failed to get Magic Hour history:', error);
+      
+      return {
+        success: false,
+        error: error.message || 'Failed to retrieve history',
+        message: 'Could not fetch generation history',
+        timestamp: new Date().toISOString(),
+      };
+    }
   }
 } 
