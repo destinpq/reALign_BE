@@ -8,6 +8,48 @@ import { MagicHourService } from './magic-hour.service';
 export class MagicHourController {
   constructor(private readonly magicHourService: MagicHourService) {}
 
+  @Post('test-api')
+  @ApiOperation({ summary: 'Test Magic Hour API without authentication' })
+  @ApiResponse({ status: 201, description: 'Test API call completed' })
+  async testMagicHourAPI(
+    @Body() body: { imageUrl: string; prompt: string; name: string },
+  ) {
+    console.log('🧪 TESTING Magic Hour API without authentication');
+    console.log('📸 Image URL:', body.imageUrl);
+    console.log('📝 Prompt:', body.prompt);
+    console.log('👤 Name:', body.name);
+
+    // Test with a dummy user ID
+    const userId = 'test-user-123';
+    
+    try {
+      const result = await this.magicHourService.generateDirectProfessionalAvatar(
+        userId,
+        body.imageUrl,
+        body.prompt,
+        body.name,
+      );
+
+      console.log('✅ Test completed successfully:', result);
+      
+      return {
+        success: true,
+        data: result,
+        message: 'Magic Hour API test completed',
+        timestamp: new Date().toISOString(),
+      };
+    } catch (error) {
+      console.error('❌ Test failed:', error);
+      
+      return {
+        success: false,
+        error: error.message,
+        message: 'Magic Hour API test failed',
+        timestamp: new Date().toISOString(),
+      };
+    }
+  }
+
   @Post('direct-professional-avatar')
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()

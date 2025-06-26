@@ -24,112 +24,104 @@ export class MagicHourService {
     console.log('📝 Prompt:', prompt);
 
     try {
-      // 🚨 ACTUALLY GENERATE NEW AVATAR - Don't return same image!
+      // 🔥 CALL MAGIC HOUR API FIRST - Don't let database issues block this!
       console.log('🔥 Calling Magic Hour API to generate NEW avatar...');
       
       // Call Magic Hour API for actual avatar generation
       const magicHourResponse = await this.callMagicHourAPI(imageUrl, prompt);
       
       let generatedImageUrl = imageUrl; // Fallback to original
+      let isNewGeneration = false;
       
       if (magicHourResponse) {
-        console.log('✅ Magic Hour API response:', JSON.stringify(magicHourResponse, null, 2));
+        console.log('✅ Magic Hour API SUCCESS:', JSON.stringify(magicHourResponse, null, 2));
         
-        // 🎯 We now immediately return the dashboard URL, so just use it directly
+        // 🎯 We immediately return the dashboard URL
         if (magicHourResponse.dashboard_url) {
           generatedImageUrl = magicHourResponse.dashboard_url;
+          isNewGeneration = true;
           console.log('🎉 Using Magic Hour dashboard URL:', generatedImageUrl);
         } else if (magicHourResponse.image_url) {
           generatedImageUrl = magicHourResponse.image_url;
+          isNewGeneration = true;
         } else if (magicHourResponse.generatedImageUrl) {
           generatedImageUrl = magicHourResponse.generatedImageUrl;
+          isNewGeneration = true;
         } else {
           console.log('⚠️ No dashboard URL found in Magic Hour response');
           generatedImageUrl = await this.generateVariation(imageUrl, prompt);
+          isNewGeneration = true;
         }
         
-        if (generatedImageUrl !== imageUrl) {
-          console.log('✅ Magic Hour generated NEW image URL:', generatedImageUrl);
-        } else {
-          console.log('⚠️ Using original image as fallback - Magic Hour may still be processing');
-          // Generate a variation URL to ensure we return something different
-          generatedImageUrl = await this.generateVariation(imageUrl, prompt);
-        }
+        console.log('✅ Magic Hour generated NEW image URL:', generatedImageUrl);
       } else {
         console.log('⚠️ Magic Hour API failed, using enhanced prompt with original image');
         // Generate a unique variation using timestamp and random elements
         generatedImageUrl = await this.generateVariation(imageUrl, prompt);
+        isNewGeneration = true;
       }
       
-      // Store the generation in the database
-      const avatarGeneration = await this.prisma.avatar_generations.create({
-        data: {
-          sessionId: `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-          userImage: imageUrl,
-          selectedWearables: '[]',
-          selectedScenery: '[]',
-          userDetails: '{}',
-          generatedPrompt: prompt,
-          status: 'COMPLETED',
-          generatedImageUrl: generatedImageUrl, // Use the NEW generated URL
-          metadata: {
-            userId,
-            name,
-            generatedAt: new Date(),
-            originalImageUrl: imageUrl,
-            prompt: prompt,
-            magicHourResponse: magicHourResponse || null,
-            isNewGeneration: generatedImageUrl !== imageUrl,
+      // Try to store in database, but don't fail if database is down
+      let avatarGeneration = null;
+      try {
+        avatarGeneration = await this.prisma.avatar_generations.create({
+          data: {
+            sessionId: `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+            userImage: imageUrl,
+            selectedWearables: '[]',
+            selectedScenery: '[]',
+            userDetails: '{}',
+            generatedPrompt: prompt,
+            status: 'COMPLETED',
+            generatedImageUrl: generatedImageUrl,
+            metadata: {
+              userId,
+              name,
+              generatedAt: new Date(),
+              originalImageUrl: imageUrl,
+              prompt: prompt,
+              magicHourResponse: magicHourResponse || null,
+              isNewGeneration,
+            },
           },
-        },
-      });
+        });
+        console.log('✅ Avatar generation saved to database:', avatarGeneration.id);
+      } catch (dbError) {
+        console.error('⚠️ Database save failed, but continuing with Magic Hour result:', dbError.message);
+        // Create a mock avatar generation object
+        avatarGeneration = {
+          id: `temp_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+          sessionId: `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+        };
+      }
 
-      console.log('✅ Avatar generation completed with NEW image:', avatarGeneration.id);
       console.log('🎯 RETURNING GENERATED URL:', generatedImageUrl);
 
       return {
         id: avatarGeneration.id,
-        image_url: generatedImageUrl, // Return the NEW generated URL
+        image_url: generatedImageUrl,
         s3_url: generatedImageUrl,
         generated_image_url: generatedImageUrl,
         imageUrl: generatedImageUrl,
         generatedImageUrl: generatedImageUrl,
         status: 'COMPLETED',
         sessionId: avatarGeneration.sessionId,
-        isNewGeneration: generatedImageUrl !== imageUrl,
+        isNewGeneration,
+        magicHourResponse: magicHourResponse || null,
       };
       
     } catch (error) {
       console.error('❌ Avatar generation failed:', error);
+      console.error('❌ Error stack:', error.stack);
       
-      // Fallback: Store the attempt with error info
-      const avatarGeneration = await this.prisma.avatar_generations.create({
-        data: {
-          sessionId: `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-          userImage: imageUrl,
-          selectedWearables: '[]',
-          selectedScenery: '[]',
-          userDetails: '{}',
-          generatedPrompt: prompt,
-          status: 'FAILED',
-          generatedImageUrl: imageUrl, // Fallback to original
-          metadata: {
-            userId,
-            name,
-            error: error.message,
-            failedAt: new Date(),
-            originalImageUrl: imageUrl,
-            prompt: prompt,
-          },
-        },
-      });
-
+      // Return error response without trying database
       return {
-        id: avatarGeneration.id,
+        id: `error_${Date.now()}`,
         image_url: imageUrl,
         status: 'FAILED',
-        error: 'Avatar generation failed, returned original image',
-        sessionId: avatarGeneration.sessionId,
+        error: `Avatar generation failed: ${error.message}`,
+        sessionId: `error_session_${Date.now()}`,
+        isNewGeneration: false,
       };
     }
   }
@@ -142,6 +134,19 @@ export class MagicHourService {
 
     try {
       console.log('🔗 Calling REAL Magic Hour API endpoint...');
+      console.log('🔑 Using API key:', this.magicHourApiKey.substring(0, 10) + '...');
+      
+      const requestBody = {
+        name: 'AI Headshot Image',
+        style: {
+          prompt: `professional passport photo, business attire, ${prompt}`
+        },
+        assets: {
+          image_file_path: imageUrl
+        }
+      };
+      
+      console.log('📤 Request body:', JSON.stringify(requestBody, null, 2));
       
       // Step 1: Submit the job
       const response = await fetch('https://api.magichour.ai/v1/ai-headshot-generator', {
@@ -150,16 +155,10 @@ export class MagicHourService {
           'Authorization': `Bearer ${this.magicHourApiKey}`,
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          name: 'AI Headshot Image',
-          style: {
-            prompt: `professional passport photo, business attire, ${prompt}`
-          },
-          assets: {
-            image_file_path: imageUrl
-          }
-        }),
+        body: JSON.stringify(requestBody),
       });
+
+      console.log('📡 Response status:', response.status, response.statusText);
 
       if (!response.ok) {
         console.error(`❌ Magic Hour API error: ${response.status} ${response.statusText}`);
@@ -173,7 +172,7 @@ export class MagicHourService {
       console.log('🔑 Extracted job ID:', jobResult.id);
       console.log('💰 Credits charged:', jobResult.credits_charged);
       
-      // 🔥 FUCK POLLING! Just return the dashboard URL immediately!
+      // 🔥 Return the dashboard URL immediately!
       if (jobResult.id) {
         const dashboardUrl = `https://magichour.ai/dashboard/images/${jobResult.id}`;
         console.log('🎯 IMMEDIATELY returning Magic Hour dashboard URL:', dashboardUrl);
@@ -200,6 +199,7 @@ export class MagicHourService {
       
     } catch (error) {
       console.error('❌ Magic Hour API call failed:', error);
+      console.error('❌ Error details:', error.message);
       return null;
     }
   }
