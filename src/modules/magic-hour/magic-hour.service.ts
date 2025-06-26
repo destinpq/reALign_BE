@@ -15,9 +15,8 @@ export class MagicHourService {
     console.log('📸 Image URL:', imageUrl);
     console.log('📝 Prompt:', prompt);
 
-    // For now, return a mock response since we don't have the actual Magic Hour API integration
-    // This prevents the 404 error and allows the payment flow to complete
-    const mockGeneratedImageUrl = `https://picsum.photos/512/512?random=${Date.now()}`;
+    // Use the actual S3 image URL that was uploaded
+    console.log('✅ Using actual S3 image URL for avatar generation:', imageUrl);
     
     // Store the generation in the database
     const avatarGeneration = await this.prisma.avatar_generations.create({
@@ -29,24 +28,26 @@ export class MagicHourService {
         userDetails: '{}',
         generatedPrompt: prompt,
         status: 'COMPLETED',
-        generatedImageUrl: mockGeneratedImageUrl,
+        generatedImageUrl: imageUrl, // Use the actual S3 URL
         metadata: {
           userId,
           name,
           generatedAt: new Date(),
-          mockGeneration: true,
+          originalImageUrl: imageUrl,
+          prompt: prompt,
         },
       },
     });
 
-    console.log('✅ Avatar generation completed:', avatarGeneration.id);
+    console.log('✅ Avatar generation completed with S3 URL:', avatarGeneration.id);
 
     return {
       id: avatarGeneration.id,
-      image_url: mockGeneratedImageUrl,
-      s3_url: mockGeneratedImageUrl,
-      generated_image_url: mockGeneratedImageUrl,
-      imageUrl: mockGeneratedImageUrl,
+      image_url: imageUrl, // Return the actual S3 URL
+      s3_url: imageUrl,
+      generated_image_url: imageUrl,
+      imageUrl: imageUrl,
+      generatedImageUrl: imageUrl,
       status: 'COMPLETED',
       sessionId: avatarGeneration.sessionId,
     };
