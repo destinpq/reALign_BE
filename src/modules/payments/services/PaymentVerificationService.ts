@@ -23,8 +23,8 @@ export class PaymentVerificationService {
     const keySecret = this.configService.get<string>('RAZORPAY_KEY_SECRET');
 
     this.razorpay = new Razorpay({
-      key_id: keyId,
-      key_secret: keySecret,
+      key_id
+      key_idsecret: keySecret,
     });
   }
 
@@ -53,12 +53,12 @@ export class PaymentVerificationService {
       this.logger.log(`✅ Live Razorpay payment verified: ${razorpayPayment.id} - ₹${Number(razorpayPayment.amount)/100}`);
 
       // Find payment record
-      const payment = await this.prismaService.payment.findFirst({
+      const payment = await this.prismaService.payments.findFirst({
         where: {
           userId,
           razorpayOrderId: verifyPaymentDto.razorpayOrderId,
         },
-        include: { user: true },
+        include: { users: true },
       });
 
       if (!payment) {
@@ -70,7 +70,7 @@ export class PaymentVerificationService {
       }
 
       // Update payment status
-      const updatedPayment = await this.prismaService.payment.update({
+      const updatedPayment = await this.prismaService.payments.update({
         where: { id: payment.id },
         data: {
           razorpayPaymentId: verifyPaymentDto.razorpayPaymentId,
@@ -85,7 +85,7 @@ export class PaymentVerificationService {
       });
 
       // Award credits to user
-      await this.prismaService.user.update({
+      await this.prismaService.users.update({
         where: { id: userId },
         data: {
           credits: {
@@ -115,7 +115,7 @@ export class PaymentVerificationService {
 
       // Send confirmation email
       await this.emailService.sendPaymentConfirmation(
-        payment.user.email,
+        payment.users.email,
         {
           paymentId: payment.id,
           amount: Number(payment.amount),
@@ -155,7 +155,7 @@ export class PaymentVerificationService {
       const twentyFourHoursAgo = new Date();
       twentyFourHoursAgo.setHours(twentyFourHoursAgo.getHours() - 24);
 
-      const recentPayment = await this.prismaService.payment.findFirst({
+      const recentPayment = await this.prismaService.payments.findFirst({
         where: {
           userId,
           status: PaymentStatus.COMPLETED,
@@ -177,7 +177,7 @@ export class PaymentVerificationService {
         return {
           hasValidPayment: true,
           paymentDetails: {
-            id: recentPayment.razorpayPaymentId,
+            
             amount: Number(recentPayment.amount) / 100, // Convert from paise
             currency: recentPayment.currency,
             completedAt: recentPayment.updatedAt,
@@ -218,7 +218,7 @@ export class PaymentVerificationService {
     const endDate = new Date();
     endDate.setMonth(endDate.getMonth() + 1); // 1 month subscription
 
-    await this.prismaService.subscription.create({
+    await this.prismaService.subscriptions.create({
       data: {
         userId,
         type: subscriptionType,
@@ -227,7 +227,7 @@ export class PaymentVerificationService {
       },
     });
 
-    await this.prismaService.user.update({
+    await this.prismaService.users.update({
       where: { id: userId },
       data: {
         subscriptionType,

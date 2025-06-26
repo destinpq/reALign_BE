@@ -33,22 +33,22 @@ export class CustomizationsController {
     @Request() req,
     @Body() createCustomizationDto: CreateCustomizationDto,
   ) {
-    return this.customizationsService.create(req.user.userId, createCustomizationDto);
+    return this.customizationsService.create(req.users.userId, createCustomizationDto);
   }
 
   @Get()
   @ApiOperation({ summary: 'Get all customizations for the current user' })
   @ApiResponse({ status: 200, description: 'Customizations retrieved successfully' })
   async findAll(@Request() req) {
-    return this.customizationsService.findAll(req.user.userId);
+    return this.customizationsService.findAll(req.users.userId);
   }
 
   @Get(':id')
   @ApiOperation({ summary: 'Get a customization by ID' })
   @ApiResponse({ status: 200, description: 'Customization retrieved successfully' })
   @ApiResponse({ status: 404, description: 'Customization not found' })
-  async findOne(@Request() req, @Param('id') id: string) {
-    return this.customizationsService.findOne(req.user.userId, id);
+  async findOne(@Request() req, @Param("id") id: string) {
+    return this.customizationsService.findOne(req.users.userId, id);
   }
 
   @Patch(':id')
@@ -57,17 +57,17 @@ export class CustomizationsController {
   @ApiResponse({ status: 404, description: 'Customization not found' })
   async update(
     @Request() req,
-    @Param('id') id: string,
+    @Param('id') 
     @Body() updateCustomizationDto: UpdateCustomizationDto,
   ) {
-    return this.customizationsService.update(req.user.userId, id, updateCustomizationDto);
+    return this.customizationsService.update(req.users.userId, id, updateCustomizationDto);
   }
 
   @Delete(':id')
   @ApiOperation({ summary: 'Delete a customization' })
   @ApiResponse({ status: 200, description: 'Customization deleted successfully' })
   @ApiResponse({ status: 404, description: 'Customization not found' })
-  async remove(@Request() req, @Param('id') id: string) {
-    return this.customizationsService.remove(req.user.userId, id);
+  async remove(@Request() req, @Param("id") id: string) {
+    return this.customizationsService.remove(req.users.userId, id);
   }
 } 

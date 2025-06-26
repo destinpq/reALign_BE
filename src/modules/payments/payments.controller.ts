@@ -57,7 +57,7 @@ export class PaymentsController {
     schema: {
       type: 'object',
       properties: {
-        id: { type: 'string', description: 'Internal payment ID' },
+         description: 'Internal payment ID' },
         razorpayOrderId: { type: 'string', description: 'Razorpay order ID' },
         amount: { type: 'number', description: 'Amount in paise' },
         currency: { type: 'string', description: 'Currency code' },
@@ -78,7 +78,7 @@ export class PaymentsController {
     @Request() req,
     @Body() createOrderDto: CreateOrderDto,
   ) {
-    return this.paymentsService.createOrder(req.user.id, createOrderDto);
+    return this.paymentsService.createOrder(req.users.id, createOrderDto);
   }
 
   @Post('verify')
@@ -108,7 +108,7 @@ export class PaymentsController {
     @Request() req,
     @Body() verifyPaymentDto: VerifyPaymentDto,
   ) {
-    return this.paymentsService.verifyPayment(req.user.id, verifyPaymentDto);
+    return this.paymentsService.verifyPayment(req.users.id, verifyPaymentDto);
   }
 
   @Get('history')
@@ -143,7 +143,7 @@ export class PaymentsController {
     @Query('limit') limit?: number,
   ) {
     return this.paymentsService.getPaymentHistory(
-      req.user.id,
+      req.users.id,
       page || 1,
       limit || 20,
     );
@@ -168,7 +168,7 @@ export class PaymentsController {
     },
   })
   async getSubscriptionStatus(@Request() req) {
-    const hasValidSubscription = await this.paymentsService.hasValidSubscription(req.user.id);
+    const hasValidSubscription = await this.paymentsService.hasValidSubscription(req.users.id);
     return {
       hasValidSubscription,
       canGenerateHeadshots: hasValidSubscription,
@@ -204,7 +204,7 @@ export class PaymentsController {
     @Body() body: { amount?: number },
   ) {
     try {
-      const userId = req.user.id;
+      const userId = req.users.id;
       const result = await this.paymentsService.verifyRecentPayment(userId, body.amount || 199);
       
       return {
@@ -342,6 +342,7 @@ export class PaymentsController {
     summary: 'Store payment data and link to avatar generation',
     description: 'Store payment data and link it to avatar generation session',
   })
+  @Post('store-payment-data')
   async storePaymentData(
     @Request() req,
     @Body() paymentData: {
@@ -356,11 +357,11 @@ export class PaymentsController {
   ) {
     try {
       // 🔥 VERIFY USER IS LOGGED IN FIRST!
-      if (!req.user || !req.user.id) {
+      if (!req.user || !req.users.id) {
         throw new Error('User not authenticated. Please log in first.');
       }
 
-      const userId = req.user.id;
+      const userId = req.users.id;
       console.log(`🔐 AUTHENTICATED USER MAKING PAYMENT: ${userId}`);
 
       // Store payment data and link to avatar generation
@@ -411,6 +412,7 @@ export class PaymentsController {
     summary: 'Get avatar generation data',
     description: 'Retrieve avatar generation data by session ID',
   })
+  @Get('avatar-generation/:sessionId')
   async getAvatarGeneration(
     @Param('sessionId') sessionId: string,
   ) {
@@ -434,6 +436,7 @@ export class PaymentsController {
     summary: 'Verify payment status',
     description: 'Verify if a payment has been successfully completed',
   })
+  @Get('verify/:paymentId')
   async verifyPaymentStatus(
     @Param('paymentId') paymentId: string,
   ) {
@@ -445,16 +448,17 @@ export class PaymentsController {
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Check if user has valid payment for avatar generation' })
   @ApiResponse({ status: 200, description: 'Payment status checked successfully' })
+  @Get('check-status')
   async checkPaymentStatus(@Req() req: any) {
     try {
-      const userId = req.user.id;
+      const userId = req.users.id;
       console.log('🔍 Checking payment status for user:', userId);
       
       // 🚨 STRICT PAYMENT CHECK: Only allow payments made in the last 10 minutes
       // This ensures user must make a fresh payment for each avatar generation
       const tenMinutesAgo = new Date(Date.now() - 10 * 60 * 1000);
       
-             const recentPayment = await this.prismaService.payment.findFirst({
+             const recentPayment = await this.prismaService.payments.findFirst({
          where: {
            userId: userId,
            status: PaymentStatus.COMPLETED,
@@ -484,7 +488,7 @@ export class PaymentsController {
         success: true,
         hasValidPayment,
         paymentData: recentPayment ? {
-          id: recentPayment.id,
+          
           amount: recentPayment.amount,
           createdAt: recentPayment.createdAt,
           description: recentPayment.description

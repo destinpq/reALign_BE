@@ -82,7 +82,7 @@ export class AuthController {
     @Body() changePasswordDto: ChangePasswordDto,
   ): Promise<{ message: string }> {
     await this.authService.changePassword(
-      req.user.id,
+      req.users.id,
       changePasswordDto.currentPassword,
       changePasswordDto.newPassword,
     );

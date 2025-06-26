@@ -26,7 +26,7 @@ export class SubscriptionService {
       const endDate = new Date();
       endDate.setMonth(endDate.getMonth() + 1); // 1 month subscription
 
-      const subscription = await this.prismaService.subscription.create({
+      const subscription = await this.prismaService.subscriptions.create({
         data: {
           userId,
           type: subscriptionType,
@@ -36,7 +36,7 @@ export class SubscriptionService {
       });
 
       // Update user subscription details
-      await this.prismaService.user.update({
+      await this.prismaService.users.update({
         where: { id: userId },
         data: {
           subscriptionType,
@@ -67,7 +67,7 @@ export class SubscriptionService {
 
   async hasValidSubscription(userId: string): Promise<boolean> {
     try {
-    const subscription = await this.prismaService.subscription.findFirst({
+    const subscription = await this.prismaService.subscriptions.findFirst({
       where: {
         userId,
         status: SubscriptionStatus.ACTIVE,
@@ -95,7 +95,7 @@ export class SubscriptionService {
 
   async getUserSubscription(userId: string) {
     try {
-      const subscription = await this.prismaService.subscription.findFirst({
+      const subscription = await this.prismaService.subscriptions.findFirst({
         where: {
           userId,
           status: SubscriptionStatus.ACTIVE,
@@ -114,7 +114,7 @@ export class SubscriptionService {
 
   async deductCredits(userId: string, amount: number): Promise<boolean> {
     try {
-      const user = await this.prismaService.user.findUnique({
+      const user = await this.prismaService.users.findUnique({
         where: { id: userId },
         select: { credits: true },
       });
@@ -124,7 +124,7 @@ export class SubscriptionService {
         return false;
       }
 
-      await this.prismaService.user.update({
+      await this.prismaService.users.update({
         where: { id: userId },
         data: {
           credits: {
@@ -155,7 +155,7 @@ export class SubscriptionService {
 
   async addCredits(userId: string, amount: number): Promise<boolean> {
     try {
-      const updatedUser = await this.prismaService.user.update({
+      const updatedUser = await this.prismaService.users.update({
         where: { id: userId },
         data: {
           credits: {
@@ -187,7 +187,7 @@ export class SubscriptionService {
 
   async getUserCredits(userId: string): Promise<number> {
     try {
-      const user = await this.prismaService.user.findUnique({
+      const user = await this.prismaService.users.findUnique({
         where: { id: userId },
         select: { credits: true },
       });
@@ -201,7 +201,7 @@ export class SubscriptionService {
 
   async cancelSubscription(userId: string): Promise<boolean> {
     try {
-      const subscription = await this.prismaService.subscription.findFirst({
+      const subscription = await this.prismaService.subscriptions.findFirst({
         where: {
           userId,
           status: SubscriptionStatus.ACTIVE,
@@ -212,7 +212,7 @@ export class SubscriptionService {
         throw new Error('No active subscription found');
       }
 
-      await this.prismaService.subscription.update({
+      await this.prismaService.subscriptions.update({
         where: { id: subscription.id },
         data: {
           status: SubscriptionStatus.CANCELLED,

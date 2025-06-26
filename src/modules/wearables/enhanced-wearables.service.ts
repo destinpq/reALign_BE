@@ -54,7 +54,7 @@ export class EnhancedWearablesService {
     }
 
     const [items, total] = await Promise.all([
-      this.prisma.wearableItem.findMany({
+      this.prisma.wearable_items.findMany({
         where,
         skip,
         take: limit,
@@ -64,7 +64,7 @@ export class EnhancedWearablesService {
           { name: 'asc' },
         ],
       }),
-      this.prisma.wearableItem.count({ where }),
+      this.prisma.wearable_items.count({ where }),
     ]);
 
     return {
@@ -83,10 +83,10 @@ export class EnhancedWearablesService {
   }
 
   async findOne(id: string) {
-    return this.prisma.wearableItem.findUnique({
+    return this.prisma.wearable_items.findUnique({
       where: { id },
       include: {
-        userSelections: {
+        user_wearable_selections: {
           select: {
             userId: true,
             selectedAt: true,
@@ -101,7 +101,7 @@ export class EnhancedWearablesService {
   }
 
   async getCategories() {
-    const categories = await this.prisma.wearableItem.groupBy({
+    const categories = await this.prisma.wearable_items.groupBy({
       by: ['category'],
       where: { isActive: true },
       _count: { category: true },
@@ -118,7 +118,7 @@ export class EnhancedWearablesService {
     const where: any = { isActive: true };
     if (category) where.category = category;
 
-    const subcategories = await this.prisma.wearableItem.groupBy({
+    const subcategories = await this.prisma.wearable_items.groupBy({
       by: ['subcategory'],
       where,
       _count: { subcategory: true },
@@ -135,27 +135,27 @@ export class EnhancedWearablesService {
 
   async getFilterOptions() {
     const [styles, colors, materials, seasons, occasions] = await Promise.all([
-      this.prisma.wearableItem.groupBy({
+      this.prisma.wearable_items.groupBy({
         by: ['style'],
         where: { isActive: true, style: { not: null } },
         _count: { style: true },
       }),
-      this.prisma.wearableItem.groupBy({
+      this.prisma.wearable_items.groupBy({
         by: ['color'],
         where: { isActive: true, color: { not: null } },
         _count: { color: true },
       }),
-      this.prisma.wearableItem.groupBy({
+      this.prisma.wearable_items.groupBy({
         by: ['material'],
         where: { isActive: true, material: { not: null } },
         _count: { material: true },
       }),
-      this.prisma.wearableItem.groupBy({
+      this.prisma.wearable_items.groupBy({
         by: ['season'],
         where: { isActive: true, season: { not: null } },
         _count: { season: true },
       }),
-      this.prisma.wearableItem.groupBy({
+      this.prisma.wearable_items.groupBy({
         by: ['occasion'],
         where: { isActive: true, occasion: { not: null } },
         _count: { occasion: true },
@@ -186,7 +186,7 @@ export class EnhancedWearablesService {
 
   async getFeaturedWearables(limit = 20) {
     // Get items with high-confidence image mappings
-    return this.prisma.wearableItem.findMany({
+    return this.prisma.wearable_items.findMany({
       where: {
         isActive: true,
         hasImage: true,
@@ -206,7 +206,7 @@ export class EnhancedWearablesService {
   async getPopularTags(limit = 20) {
     // This would require a more complex query to count tag occurrences
     // For now, return a simplified version
-    const items = await this.prisma.wearableItem.findMany({
+    const items = await this.prisma.wearable_items.findMany({
       where: { isActive: true },
       select: { tags: true },
     });
@@ -225,12 +225,12 @@ export class EnhancedWearablesService {
   }
 
   async getImageMappingStats() {
-    const total = await this.prisma.wearableItem.count();
-    const withImages = await this.prisma.wearableItem.count({
+    const total = await this.prisma.wearable_items.count();
+    const withImages = await this.prisma.wearable_items.count({
       where: { hasImage: true }
     });
 
-    const mappingTypes = await this.prisma.wearableItem.groupBy({
+    const mappingTypes = await this.prisma.wearable_items.groupBy({
       by: ['imageMapping'],
       where: { hasImage: true },
       _count: { imageMapping: true },

@@ -87,7 +87,7 @@ export class TransactionService {
       this.logger.log(`Creating transaction: ${data.transactionId} for user: ${data.userId}`);
 
       // Check if transaction already exists
-      const existing = await this.prisma.transaction.findUnique({
+      const existing = await this.prisma.transactions.findUnique({
         where: { transactionId: data.transactionId }
       });
 
@@ -98,7 +98,7 @@ export class TransactionService {
       // Get user's current credit balance if userId provided
       let creditBalance = null;
       if (data.userId) {
-        const user = await this.prisma.user.findUnique({
+        const user = await this.prisma.users.findUnique({
           where: { id: data.userId },
           select: { credits: true }
         });
@@ -112,7 +112,7 @@ export class TransactionService {
       const netAmount = data.amount - platformFee - gatewayFee - taxes;
 
       // Create transaction
-      const transaction = await this.prisma.transaction.create({
+      const transaction = await this.prisma.transactions.create({
         data: {
           ...data,
           creditBalance,
@@ -153,7 +153,7 @@ export class TransactionService {
 
   async updateTransaction(transactionId: string, data: UpdateTransactionDto, triggeredBy?: string): Promise<any> {
     try {
-      const transaction = await this.prisma.transaction.findUnique({
+      const transaction = await this.prisma.transactions.findUnique({
         where: { transactionId }
       });
 
@@ -163,11 +163,11 @@ export class TransactionService {
 
       const oldValues = { ...transaction };
       
-      const updatedTransaction = await this.prisma.transaction.update({
+      const updatedTransaction = await this.prisma.transactions.update({
         where: { transactionId },
         data: {
           ...data,
-          updatedAt: new Date(),
+          
         }
       });
 
@@ -202,18 +202,18 @@ export class TransactionService {
   }
 
   async getTransaction(transactionId: string): Promise<any> {
-    const transaction = await this.prisma.transaction.findUnique({
+    const transaction = await this.prisma.transactions.findUnique({
       where: { transactionId },
       include: {
-        user: {
+        users: {
           select: {
-            id: true,
+            
             email: true,
             firstName: true,
             lastName: true,
           }
         },
-        events: {
+        transaction_events: {
           orderBy: { createdAt: 'desc' },
           take: 50
         },
@@ -258,15 +258,15 @@ export class TransactionService {
     }
 
     const [transactions, total] = await Promise.all([
-      this.prisma.transaction.findMany({
+      this.prisma.transactions.findMany({
         where,
         skip,
         take: limit,
         orderBy: { createdAt: 'desc' },
         include: {
-          user: {
+          users: {
             select: {
-              id: true,
+              
               email: true,
               firstName: true,
               lastName: true,
@@ -274,7 +274,7 @@ export class TransactionService {
           }
         }
       }),
-      this.prisma.transaction.count({ where })
+      this.prisma.transactions.count({ where })
     ]);
 
     return {
@@ -306,7 +306,7 @@ export class TransactionService {
       duration?: number;
     }
   ): Promise<any> {
-    return this.prisma.transactionEvent.create({
+    return this.prisma.transaction_events.create({
       data: {
         transactionId,
         eventType,
@@ -323,7 +323,7 @@ export class TransactionService {
   }
 
   async getTransactionEvents(transactionId: string): Promise<any> {
-    const transaction = await this.prisma.transaction.findUnique({
+    const transaction = await this.prisma.transactions.findUnique({
       where: { transactionId }
     });
 
@@ -331,7 +331,7 @@ export class TransactionService {
       throw new NotFoundException('Transaction not found');
     }
 
-    return this.prisma.transactionEvent.findMany({
+    return this.prisma.transaction_events.findMany({
       where: { transactionId: transaction.id },
       orderBy: { createdAt: 'desc' }
     });
@@ -368,7 +368,7 @@ export class TransactionService {
   private async handleTransactionCompleted(transaction: any, triggeredBy?: string): Promise<void> {
     // Update user credits if applicable
     if (transaction.creditsAwarded && transaction.creditsAwarded > 0 && transaction.userId) {
-      await this.prisma.user.update({
+      await this.prisma.users.update({
         where: { id: transaction.userId },
         data: {
           credits: {
@@ -410,7 +410,7 @@ export class TransactionService {
   private async handleTransactionRefunded(transaction: any, triggeredBy?: string): Promise<void> {
     // Deduct credits if they were awarded
     if (transaction.creditsAwarded && transaction.creditsAwarded > 0 && transaction.userId) {
-      await this.prisma.user.update({
+      await this.prisma.users.update({
         where: { id: transaction.userId },
         data: {
           credits: {
@@ -505,27 +505,27 @@ export class TransactionService {
       topGateways,
       recentTransactions
     ] = await Promise.all([
-      this.prisma.transaction.count({ where }),
-      this.prisma.transaction.count({ where: { ...where, status: TransactionStatus.COMPLETED } }),
-      this.prisma.transaction.count({ where: { ...where, status: TransactionStatus.FAILED } }),
-      this.prisma.transaction.aggregate({ where, _sum: { amount: true } }),
-      this.prisma.transaction.aggregate({ 
+      this.prisma.transactions.count({ where }),
+      this.prisma.transactions.count({ where: { ...where, status: TransactionStatus.COMPLETED } }),
+      this.prisma.transactions.count({ where: { ...where, status: TransactionStatus.FAILED } }),
+      this.prisma.transactions.aggregate({ where, _sum: { amount: true } }),
+      this.prisma.transactions.aggregate({ 
         where: { ...where, status: TransactionStatus.COMPLETED }, 
         _sum: { amount: true } 
       }),
-      this.prisma.transaction.aggregate({ 
+      this.prisma.transactions.aggregate({ 
         where: { ...where, status: TransactionStatus.REFUNDED }, 
         _sum: { refundAmount: true } 
       }),
-      this.prisma.transaction.aggregate({ where, _avg: { amount: true } }),
+      this.prisma.transactions.aggregate({ where, _avg: { amount: true } }),
       this.getTopCountries(where),
       this.getTopGateways(where),
-      this.prisma.transaction.findMany({
+      this.prisma.transactions.findMany({
         where,
         take: 10,
         orderBy: { createdAt: 'desc' },
         include: {
-          user: {
+          users: {
             select: { email: true, firstName: true, lastName: true }
           }
         }
@@ -556,7 +556,7 @@ export class TransactionService {
   }
 
   private async getTopCountries(where: any): Promise<any> {
-    return this.prisma.transaction.groupBy({
+    return this.prisma.transactions.groupBy({
       by: ['country'],
       where: { ...where, country: { not: null } },
       _count: { country: true },
@@ -567,7 +567,7 @@ export class TransactionService {
   }
 
   private async getTopGateways(where: any): Promise<any> {
-    return this.prisma.transaction.groupBy({
+    return this.prisma.transactions.groupBy({
       by: ['paymentGateway'],
       where: { ...where, paymentGateway: { not: null } },
       _count: { paymentGateway: true },
@@ -582,7 +582,7 @@ export class TransactionService {
     date.setHours(0, 0, 0, 0);
 
     // Update daily analytics
-    await this.prisma.transactionAnalytics.upsert({
+    await this.prisma.transaction_analytics.upsert({
       where: { date },
       update: {
         totalTransactions: { increment: 1 },
@@ -616,7 +616,7 @@ export class TransactionService {
 
     // User history risk
     if (transaction.userId) {
-      const userTransactionCount = await this.prisma.transaction.count({
+      const userTransactionCount = await this.prisma.transactions.count({
         where: { userId: transaction.userId }
       });
       
@@ -648,7 +648,7 @@ export class TransactionService {
     reason: string, 
     refundedBy: string
   ): Promise<any> {
-    const parentTransaction = await this.prisma.transaction.findUnique({
+    const parentTransaction = await this.prisma.transactions.findUnique({
       where: { transactionId: parentTransactionId }
     });
 
@@ -675,7 +675,7 @@ export class TransactionService {
     }, refundedBy);
 
     // Update parent transaction
-    await this.prisma.transaction.update({
+    await this.prisma.transactions.update({
       where: { id: parentTransaction.id },
       data: {
         refundAmount: { increment: refundAmount },

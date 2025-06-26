@@ -48,7 +48,7 @@ export class AuthResponseDto {
   expiresIn: number;
 
   @ApiProperty()
-  user: {
+  users: {
     id: string;
     email: string;
     firstName?: string;

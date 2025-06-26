@@ -27,7 +27,7 @@ export class UsersController {
   @ApiOperation({ summary: 'Get user profile' })
   @ApiResponse({ status: 200, description: 'User profile retrieved successfully' })
   async getProfile(@Request() req) {
-    return this.usersService.findById(req.user.id);
+    return this.usersService.findById(req.users.id);
   }
 
   @Post('avatar-session')
@@ -37,9 +37,9 @@ export class UsersController {
     @Request() req,
     @Body() body: { sessionData: any; timestamp: string },
   ) {
-    console.log('🔧 saveAvatarSession called with userId:', req.user.id);
+    console.log('🔧 saveAvatarSession called with userId:', req.users.id);
     const result = await this.usersService.saveAvatarSession(
-      req.user.id,
+      req.users.id,
       body.sessionData,
     );
     
@@ -55,8 +55,8 @@ export class UsersController {
   @ApiOperation({ summary: 'Load avatar creation session from database' })
   @ApiResponse({ status: 200, description: 'Avatar session loaded successfully' })
   async getAvatarSession(@Request() req) {
-    console.log('🔧 getAvatarSession called with userId:', req.user.id);
-    const result = await this.usersService.getAvatarSession(req.user.id);
+    console.log('🔧 getAvatarSession called with userId:', req.users.id);
+    const result = await this.usersService.getAvatarSession(req.users.id);
     
     return {
       success: true,
@@ -68,8 +68,8 @@ export class UsersController {
   @ApiOperation({ summary: 'Clear avatar creation session from database' })
   @ApiResponse({ status: 200, description: 'Avatar session cleared successfully' })
   async clearAvatarSession(@Request() req) {
-    console.log('🗑️ clearAvatarSession called with userId:', req.user.id);
-    const result = await this.usersService.clearAvatarSession(req.user.id);
+    console.log('🗑️ clearAvatarSession called with userId:', req.users.id);
+    const result = await this.usersService.clearAvatarSession(req.users.id);
     
     return {
       success: true,
@@ -81,6 +81,6 @@ export class UsersController {
   @ApiOperation({ summary: 'Get user statistics' })
   @ApiResponse({ status: 200, description: 'User statistics retrieved successfully' })
   async getUserStats(@Request() req) {
-    return this.usersService.getUserStats(req.user.id);
+    return this.usersService.getUserStats(req.users.id);
   }
 } 

@@ -28,7 +28,7 @@ export class AdminService {
   async createAdmin(createAdminDto: CreateAdminDto, createdBy: string) {
     try {
       // Check if admin already exists
-      const existingAdmin = await this.prismaService.user.findUnique({
+      const existingAdmin = await this.prismaService.users.findUnique({
         where: { email: createAdminDto.email },
       });
 
@@ -40,7 +40,7 @@ export class AdminService {
       const hashedPassword = await bcrypt.hash(createAdminDto.password, 12);
 
       // Create admin user
-      const admin = await this.prismaService.user.create({
+      const admin = await this.prismaService.users.create({
         data: {
           email: createAdminDto.email,
           password: hashedPassword,
@@ -68,7 +68,7 @@ export class AdminService {
       this.logger.log(`Admin created: ${admin.email} by ${createdBy}`);
 
       return {
-        id: admin.id,
+        
         email: admin.email,
         firstName: admin.firstName,
         lastName: admin.lastName,
@@ -98,37 +98,37 @@ export class AdminService {
         totalCreditsConsumed,
         emailStats,
       ] = await Promise.all([
-        this.prismaService.user.count(),
-        this.prismaService.user.count({
+        this.prismaService.users.count(),
+        this.prismaService.users.count({
           where: {
             lastLoginAt: { gte: thirtyDaysAgo },
           },
         }),
-        this.prismaService.payment.count(),
-        this.prismaService.payment.aggregate({
+        this.prismaService.payments.count(),
+        this.prismaService.payments.aggregate({
           _sum: { amount: true },
           where: { status: 'COMPLETED' },
         }),
-        this.prismaService.processingJob.count({
+        this.prismaService.processing_jobs.count({
           where: { type: 'HEADSHOT_GENERATION' },
         }),
-        this.prismaService.processingJob.count({
+        this.prismaService.processing_jobs.count({
           where: {
             type: 'HEADSHOT_GENERATION',
             status: 'COMPLETED',
           },
         }),
-        this.prismaService.processingJob.count({
+        this.prismaService.processing_jobs.count({
           where: {
             type: 'HEADSHOT_GENERATION',
             status: 'FAILED',
           },
         }),
-        this.prismaService.payment.aggregate({
+        this.prismaService.payments.aggregate({
           _sum: { creditsAwarded: true },
           where: { status: 'COMPLETED' },
         }),
-        this.prismaService.processingJob.aggregate({
+        this.prismaService.processing_jobs.aggregate({
           _sum: { creditsUsed: true },
         }),
         this.emailService.getEmailStats(),
@@ -178,13 +178,13 @@ export class AdminService {
       }
 
       const [users, total] = await Promise.all([
-        this.prismaService.user.findMany({
+        this.prismaService.users.findMany({
           where: whereClause,
           orderBy: { createdAt: 'desc' },
           skip,
           take: limit,
           select: {
-            id: true,
+            
             email: true,
             firstName: true,
             lastName: true,
@@ -198,12 +198,12 @@ export class AdminService {
             _count: {
               select: {
                 payments: true,
-                processingJobs: true,
+                processing_jobs: true,
               },
             },
           },
         }),
-        this.prismaService.user.count({ where: whereClause }),
+        this.prismaService.users.count({ where: whereClause }),
       ]);
 
       return {
@@ -244,28 +244,28 @@ export class AdminService {
         paymentsByMonth,
         topUsers,
       ] = await Promise.all([
-        this.prismaService.payment.count({ where: whereClause }),
-        this.prismaService.payment.aggregate({
+        this.prismaService.payments.count({ where: whereClause }),
+        this.prismaService.payments.aggregate({
           _sum: { amount: true },
           where: whereClause,
         }),
-        this.prismaService.payment.aggregate({
+        this.prismaService.payments.aggregate({
           _avg: { amount: true },
           where: whereClause,
         }),
-        this.prismaService.payment.groupBy({
+        this.prismaService.payments.groupBy({
           by: ['status'],
           where: whereClause,
           _count: { status: true },
           _sum: { amount: true },
         }),
-        this.prismaService.payment.groupBy({
+        this.prismaService.payments.groupBy({
           by: ['createdAt'],
           where: whereClause,
           _count: { id: true },
           _sum: { amount: true },
         }),
-        this.prismaService.payment.groupBy({
+        this.prismaService.payments.groupBy({
           by: ['userId'],
           where: { ...whereClause, status: 'COMPLETED' },
           _count: { userId: true },
@@ -298,7 +298,7 @@ export class AdminService {
     adminId: string,
   ) {
     try {
-      const user = await this.prismaService.user.findUnique({
+      const user = await this.prismaService.users.findUnique({
         where: { id: updateUserStatusDto.userId },
       });
 
@@ -306,7 +306,7 @@ export class AdminService {
         throw new BadRequestException('User not found');
       }
 
-      const updatedUser = await this.prismaService.user.update({
+      const updatedUser = await this.prismaService.users.update({
         where: { id: updateUserStatusDto.userId },
         data: { isActive: updateUserStatusDto.isActive },
       });
@@ -350,7 +350,7 @@ export class AdminService {
 
   async awardCredits(awardCreditsDto: AwardCreditsDto, adminId: string) {
     try {
-      const user = await this.prismaService.user.findUnique({
+      const user = await this.prismaService.users.findUnique({
         where: { id: awardCreditsDto.userId },
         select: { credits: true, email: true, firstName: true, lastName: true },
       });
@@ -359,7 +359,7 @@ export class AdminService {
         throw new BadRequestException('User not found');
       }
 
-      const updatedUser = await this.prismaService.user.update({
+      const updatedUser = await this.prismaService.users.update({
         where: { id: awardCreditsDto.userId },
         data: {
           credits: { increment: awardCreditsDto.credits },
@@ -421,14 +421,14 @@ export class AdminService {
 
   async getUserDetails(userId: string) {
     try {
-      const user = await this.prismaService.user.findUnique({
+      const user = await this.prismaService.users.findUnique({
         where: { id: userId },
         include: {
           payments: {
             orderBy: { createdAt: 'desc' },
             take: 10,
           },
-          processingJobs: {
+          processing_jobs: {
             orderBy: { createdAt: 'desc' },
             take: 10,
           },
@@ -471,14 +471,14 @@ export class AdminService {
         headshotsYesterday,
         systemHealth,
       ] = await Promise.all([
-        this.prismaService.user.count({
+        this.prismaService.users.count({
           where: {
             createdAt: {
               gte: new Date(today.toDateString()),
             },
           },
         }),
-        this.prismaService.user.count({
+        this.prismaService.users.count({
           where: {
             createdAt: {
               gte: new Date(yesterday.toDateString()),
@@ -486,14 +486,14 @@ export class AdminService {
             },
           },
         }),
-        this.prismaService.payment.count({
+        this.prismaService.payments.count({
           where: {
             createdAt: {
               gte: new Date(today.toDateString()),
             },
           },
         }),
-        this.prismaService.payment.count({
+        this.prismaService.payments.count({
           where: {
             createdAt: {
               gte: new Date(yesterday.toDateString()),
@@ -501,7 +501,7 @@ export class AdminService {
             },
           },
         }),
-        this.prismaService.processingJob.count({
+        this.prismaService.processing_jobs.count({
           where: {
             type: 'HEADSHOT_GENERATION',
             createdAt: {
@@ -509,7 +509,7 @@ export class AdminService {
             },
           },
         }),
-        this.prismaService.processingJob.count({
+        this.prismaService.processing_jobs.count({
           where: {
             type: 'HEADSHOT_GENERATION',
             createdAt: {
@@ -556,14 +556,14 @@ export class AdminService {
         totalImages,
         totalWearables,
       ] = await Promise.all([
-        this.prismaService.user.count(),
-        this.prismaService.processingJob.count({
+        this.prismaService.users.count(),
+        this.prismaService.processing_jobs.count({
           where: {
             type: 'HEADSHOT_GENERATION',
             status: 'COMPLETED',
           },
         }),
-        this.prismaService.wearableItem.count(),
+        this.prismaService.wearable_items.count(),
       ]);
 
       return {
@@ -591,14 +591,14 @@ export class AdminService {
       await this.prismaService.$queryRaw`SELECT 1`;
       
       // Check recent error rates
-      const recentErrors = await this.prismaService.auditLog.count({
+      const recentErrors = await this.prismaService.audit_logs.count({
         where: {
           action: { contains: 'error' },
           createdAt: { gte: new Date(Date.now() - 24 * 60 * 60 * 1000) },
         },
       });
 
-      const totalRequests = await this.prismaService.auditLog.count({
+      const totalRequests = await this.prismaService.audit_logs.count({
         where: {
           createdAt: { gte: new Date(Date.now() - 24 * 60 * 60 * 1000) },
         },

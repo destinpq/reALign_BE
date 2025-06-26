@@ -25,7 +25,7 @@ export class AuditService {
     try {
       // Create audit log without foreign key relations to avoid constraint violations
       // The entityId field will still contain the ID for reference, but won't create FK constraints
-      await this.prismaService.auditLog.create({
+      await this.prismaService.audit_logs.create({
         data: {
           userId: data.userId,
           action: data.action,
@@ -55,13 +55,13 @@ export class AuditService {
     const skip = (page - 1) * limit;
 
     const [logs, total] = await Promise.all([
-      this.prismaService.auditLog.findMany({
+      this.prismaService.audit_logs.findMany({
         where: { userId },
         orderBy: { createdAt: 'desc' },
         skip,
         take: limit,
         select: {
-          id: true,
+          
           action: true,
           entityType: true,
           entityId: true,
@@ -70,7 +70,7 @@ export class AuditService {
           createdAt: true,
         },
       }),
-      this.prismaService.auditLog.count({
+      this.prismaService.audit_logs.count({
         where: { userId },
       }),
     ]);
@@ -90,14 +90,14 @@ export class AuditService {
     const skip = (page - 1) * limit;
 
     const [logs, total] = await Promise.all([
-      this.prismaService.auditLog.findMany({
+      this.prismaService.audit_logs.findMany({
         orderBy: { createdAt: 'desc' },
         skip,
         take: limit,
         include: {
-          user: {
+          users: {
             select: {
-              id: true,
+              
               email: true,
               firstName: true,
               lastName: true,
@@ -105,7 +105,7 @@ export class AuditService {
           },
         },
       }),
-      this.prismaService.auditLog.count(),
+      this.prismaService.audit_logs.count(),
     ]);
 
     return {
@@ -123,15 +123,15 @@ export class AuditService {
     const skip = (page - 1) * limit;
 
     const [logs, total] = await Promise.all([
-      this.prismaService.auditLog.findMany({
+      this.prismaService.audit_logs.findMany({
         where: { action },
         orderBy: { createdAt: 'desc' },
         skip,
         take: limit,
         include: {
-          user: {
+          users: {
             select: {
-              id: true,
+              
               email: true,
               firstName: true,
               lastName: true,
@@ -139,7 +139,7 @@ export class AuditService {
           },
         },
       }),
-      this.prismaService.auditLog.count({
+      this.prismaService.audit_logs.count({
         where: { action },
       }),
     ]);
@@ -173,24 +173,24 @@ export class AuditService {
       topActions,
       topUsers,
     ] = await Promise.all([
-      this.prismaService.auditLog.count({ where: whereClause }),
-      this.prismaService.auditLog.count({
+      this.prismaService.audit_logs.count({ where: whereClause }),
+      this.prismaService.audit_logs.count({
         where: { ...whereClause, action: { contains: 'user.' } },
       }),
-      this.prismaService.auditLog.count({
+      this.prismaService.audit_logs.count({
         where: { ...whereClause, action: { contains: 'payment.' } },
       }),
-      this.prismaService.auditLog.count({
+      this.prismaService.audit_logs.count({
         where: { ...whereClause, source: AuditSource.SYSTEM },
       }),
-      this.prismaService.auditLog.groupBy({
+      this.prismaService.audit_logs.groupBy({
         by: ['action'],
         where: whereClause,
         _count: { action: true },
         orderBy: { _count: { action: 'desc' } },
         take: 10,
       }),
-      this.prismaService.auditLog.groupBy({
+      this.prismaService.audit_logs.groupBy({
         by: ['userId'],
         where: { ...whereClause, userId: { not: null } },
         _count: { userId: true },

@@ -121,16 +121,16 @@ export class WearableImageMapperService {
     }
   }
 
-  private async readCSVFile(): Promise<Array<{id: string, category: string, name: string}>> {
+  private async readCSVFile(): Promise<Array<{ category: string, name: string}>> {
     return new Promise((resolve, reject) => {
-      const results: Array<{id: string, category: string, name: string}> = [];
+      const results: Array<{ category: string, name: string}> = [];
       const csvPath = path.join(process.cwd(), '..', 'shared', '10_000_Specific_Wearable_Avatar_Materials.csv');
       
       fs.createReadStream(csvPath)
         .pipe(csv())
         .on('data', (data) => {
           results.push({
-            id: data.ID,
+            
             category: data.Category,
             name: data['Wearable Item']
           });
@@ -144,7 +144,7 @@ export class WearableImageMapperService {
     });
   }
 
-  private findBestImageMatch(csvItem: {id: string, category: string, name: string}): WearableImageMapping | null {
+  private findBestImageMatch(csvItem: { category: string, name: string}): WearableImageMapping | null {
     let bestMatch: WearableImageMapping | null = null;
     let highestConfidence = 0;
 
@@ -375,7 +375,7 @@ export class WearableImageMapperService {
       const csvData = await this.readCSVFile();
 
       // Clear existing wearable items
-      await this.prismaService.wearableItem.deleteMany();
+      await this.prismaService.wearable_items.deleteMany();
       
       let insertedCount = 0;
       
@@ -397,9 +397,9 @@ export class WearableImageMapperService {
         }
 
         // Create wearable item in database
-        await this.prismaService.wearableItem.create({
+        await this.prismaService.wearable_items.create({
           data: {
-            id: csvItem.id,
+            
             name: csvItem.name,
             category: csvItem.category as any, // Prisma enum
             subcategory: this.determineSubcategory(csvItem.name, csvItem.category),
@@ -596,16 +596,16 @@ export class WearableImageMapperService {
   }
 
   async getWearableStats(): Promise<any> {
-    const stats = await this.prismaService.wearableItem.groupBy({
+    const stats = await this.prismaService.wearable_items.groupBy({
       by: ['category'],
       _count: { category: true }
     });
 
-    const withImages = await this.prismaService.wearableItem.count({
+    const withImages = await this.prismaService.wearable_items.count({
       where: { hasImage: true }
     });
 
-    const total = await this.prismaService.wearableItem.count();
+    const total = await this.prismaService.wearable_items.count();
 
     return {
       totalItems: total,

@@ -17,7 +17,7 @@ export class AuthService {
     const { email, password, firstName, lastName } = registerDto;
 
     // Check if user already exists
-    const existingUser = await this.prisma.user.findUnique({
+    const existingUser = await this.prisma.users.findUnique({
       where: { email },
     });
 
@@ -32,7 +32,7 @@ export class AuthService {
     const hashedPassword = await bcrypt.hash(password, saltRounds);
 
     // Create user
-    const user = await this.prisma.user.create({
+    const user = await this.prisma.users.create({
       data: {
         email,
         password: hashedPassword,
@@ -41,7 +41,7 @@ export class AuthService {
         credits: 5, // Free tier credits
       },
       select: {
-        id: true,
+        
         email: true,
         firstName: true,
         lastName: true,
@@ -64,10 +64,10 @@ export class AuthService {
     const { email, password } = loginDto;
 
     // Find user
-    const user = await this.prisma.user.findUnique({
+    const user = await this.prisma.users.findUnique({
       where: { email },
       select: {
-        id: true,
+        
         email: true,
         password: true,
         firstName: true,
@@ -105,10 +105,10 @@ export class AuthService {
   }
 
   async validateUser(email: string, password: string): Promise<any> {
-    const user = await this.prisma.user.findUnique({
+    const user = await this.prisma.users.findUnique({
       where: { email },
       select: {
-        id: true,
+        
         email: true,
         password: true,
         firstName: true,
@@ -127,10 +127,10 @@ export class AuthService {
   }
 
   async validateUserById(userId: string): Promise<any> {
-    const user = await this.prisma.user.findUnique({
+    const user = await this.prisma.users.findUnique({
       where: { id: userId },
       select: {
-        id: true,
+        
         email: true,
         firstName: true,
         lastName: true,
@@ -169,7 +169,7 @@ export class AuthService {
   }
 
   async changePassword(userId: string, currentPassword: string, newPassword: string): Promise<void> {
-    const user = await this.prisma.user.findUnique({
+    const user = await this.prisma.users.findUnique({
       where: { id: userId },
       select: { password: true },
     });
@@ -186,7 +186,7 @@ export class AuthService {
     const saltRounds = parseInt(this.configService.get('BCRYPT_SALT_ROUNDS')) || 12;
     const hashedNewPassword = await bcrypt.hash(newPassword, saltRounds);
 
-    await this.prisma.user.update({
+    await this.prisma.users.update({
       where: { id: userId },
       data: { password: hashedNewPassword },
     });

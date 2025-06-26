@@ -100,7 +100,7 @@ export class WearablesController {
     description: 'User selections retrieved successfully',
   })
   async getUserSelections(@Request() req) {
-    return this.wearablesService.getUserSelections(req.user.userId);
+    return this.wearablesService.getUserSelections(req.users.userId);
   }
 
   @Post('user/selections')
@@ -118,7 +118,7 @@ export class WearablesController {
     @Request() req,
     @Body() body: { wearableIds: string[] },
   ) {
-    return this.wearablesService.updateUserSelections(req.user.userId, body.wearableIds);
+    return this.wearablesService.updateUserSelections(req.users.userId, body.wearableIds);
   }
 
   @Get(':id')
@@ -139,7 +139,7 @@ export class WearablesController {
     status: 404,
     description: 'Wearable item not found',
   })
-  async findOne(@Param('id') id: string) {
+  async findOne(@Param("id") id: string) {
     return this.wearablesService.findOne(id);
   }
 
@@ -156,7 +156,7 @@ export class WearablesController {
     description: 'Wearable item updated successfully',
   })
   async update(
-    @Param('id') id: string,
+    @Param('id') 
     @Body() updateWearableDto: UpdateWearableDto,
   ) {
     return this.wearablesService.update(id, updateWearableDto);
@@ -174,7 +174,7 @@ export class WearablesController {
     status: 200,
     description: 'Wearable item deleted successfully',
   })
-  async remove(@Param('id') id: string) {
+  async remove(@Param("id") id: string) {
     return this.wearablesService.remove(id);
   }
 

@@ -176,7 +176,7 @@ export class ContentModerationService {
       });
 
       // Get user details for potential action
-      const user = await this.prismaService.user.findUnique({
+      const user = await this.prismaService.users.findUnique({
         where: { id: userId },
         select: { email: true, firstName: true, lastName: true },
       });
@@ -215,7 +215,7 @@ export class ContentModerationService {
   ) {
     try {
       // Get admin users
-      const admins = await this.prismaService.user.findMany({
+      const admins = await this.prismaService.users.findMany({
         where: {
           role: { in: ['ADMIN', 'SUPER_ADMIN'] },
           isActive: true,
@@ -247,7 +247,7 @@ export class ContentModerationService {
     const skip = (page - 1) * limit;
 
     const [violations, total] = await Promise.all([
-      this.prismaService.auditLog.findMany({
+      this.prismaService.audit_logs.findMany({
         where: {
           action: 'content.violation_detected',
         },
@@ -255,9 +255,9 @@ export class ContentModerationService {
         skip,
         take: limit,
         include: {
-          user: {
+          users: {
             select: {
-              id: true,
+              
               email: true,
               firstName: true,
               lastName: true,
@@ -266,7 +266,7 @@ export class ContentModerationService {
           },
         },
       }),
-      this.prismaService.auditLog.count({
+      this.prismaService.audit_logs.count({
         where: {
           action: 'content.violation_detected',
         },
@@ -275,7 +275,7 @@ export class ContentModerationService {
 
     return {
       violations: violations.map(violation => ({
-        id: violation.id,
+        
         userId: violation.userId,
         user: violation.user,
         violationType: violation.metadata?.['violationType'],
@@ -295,7 +295,7 @@ export class ContentModerationService {
   }
 
   async getUserViolationHistory(userId: string) {
-    const violations = await this.prismaService.auditLog.findMany({
+    const violations = await this.prismaService.audit_logs.findMany({
       where: {
         userId,
         action: 'content.violation_detected',
@@ -350,14 +350,14 @@ export class ContentModerationService {
       highRiskViolations,
       uniqueViolators,
     ] = await Promise.all([
-      this.prismaService.auditLog.count({ where: whereClause }),
-      this.prismaService.auditLog.count({
+      this.prismaService.audit_logs.count({ where: whereClause }),
+      this.prismaService.audit_logs.count({
         where: {
           ...whereClause,
           action: 'content.violation_detected',
         },
       }),
-      this.prismaService.auditLog.count({
+      this.prismaService.audit_logs.count({
         where: {
           ...whereClause,
           action: 'content.violation_detected',
@@ -367,7 +367,7 @@ export class ContentModerationService {
           },
         },
       }),
-      this.prismaService.auditLog.findMany({
+      this.prismaService.audit_logs.findMany({
         where: {
           ...whereClause,
           action: 'content.violation_detected',

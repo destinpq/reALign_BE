@@ -21,7 +21,7 @@ export class AvatarGenerationDataService {
   }) {
     try {
       // Store avatar generation data in database
-      const avatarGeneration = await this.prismaService.avatarGeneration.create({
+      const avatarGeneration = await this.prismaService.avatar_generations.create({
         data: {
           sessionId: avatarData.sessionId,
           userImage: avatarData.userImage,
@@ -45,7 +45,7 @@ export class AvatarGenerationDataService {
   async updateAvatarGenerationStatus(sessionId: string, status: string, paymentId?: string) {
     try {
       // First check if the record exists
-      const existing = await this.prismaService.avatarGeneration.findUnique({
+      const existing = await this.prismaService.avatar_generations.findUnique({
         where: { sessionId },
       });
 
@@ -56,14 +56,14 @@ export class AvatarGenerationDataService {
 
       const updateData: any = {
         status,
-        updatedAt: new Date(),
+        
       };
 
       if (paymentId) {
         updateData.paymentId = paymentId;
       }
 
-      const updated = await this.prismaService.avatarGeneration.update({
+      const updated = await this.prismaService.avatar_generations.update({
         where: { sessionId },
         data: updateData,
       });
@@ -78,7 +78,7 @@ export class AvatarGenerationDataService {
 
   async getAvatarGenerationBySession(sessionId: string) {
     try {
-      const avatarGeneration = await this.prismaService.avatarGeneration.findUnique({
+      const avatarGeneration = await this.prismaService.avatar_generations.findUnique({
         where: { sessionId },
       });
 
@@ -95,7 +95,7 @@ export class AvatarGenerationDataService {
 
   async linkAvatarGenerationToPayment(sessionId: string, paymentId: string) {
     try {
-      const updated = await this.prismaService.avatarGeneration.update({
+      const updated = await this.prismaService.avatar_generations.update({
         where: { sessionId },
         data: { paymentId },
       });
@@ -113,7 +113,7 @@ export class AvatarGenerationDataService {
       const skip = (page - 1) * limit;
       
       const [avatarGenerations, total] = await Promise.all([
-        this.prismaService.avatarGeneration.findMany({
+        this.prismaService.avatar_generations.findMany({
           where: {
             paymentId: {
               not: null,
@@ -124,7 +124,7 @@ export class AvatarGenerationDataService {
           take: limit,
           // Removed payment include since the relation might not exist in the schema
         }),
-        this.prismaService.avatarGeneration.count({
+        this.prismaService.avatar_generations.count({
           where: {
             paymentId: {
               not: null,

@@ -7,7 +7,7 @@ export class CustomizationsService {
   constructor(private readonly prismaService: PrismaService) {}
 
   async create(userId: string, createCustomizationDto: CreateCustomizationDto) {
-    return this.prismaService.avatarCustomization.create({
+    return this.prismaService.avatar_customizations.create({
       data: {
         userId,
         ...createCustomizationDto,
@@ -16,14 +16,14 @@ export class CustomizationsService {
   }
 
   async findAll(userId: string) {
-    return this.prismaService.avatarCustomization.findMany({
+    return this.prismaService.avatar_customizations.findMany({
       where: { userId },
       orderBy: { createdAt: 'desc' },
     });
   }
 
   async findOne(userId: string, id: string) {
-    const customization = await this.prismaService.avatarCustomization.findFirst({
+    const customization = await this.prismaService.avatar_customizations.findFirst({
       where: { id, userId },
     });
 
@@ -34,10 +34,10 @@ export class CustomizationsService {
     return customization;
   }
 
-  async update(userId: string, id: string, updateCustomizationDto: UpdateCustomizationDto) {
+  async update(userId: string,  updateCustomizationDto: UpdateCustomizationDto) {
     await this.findOne(userId, id); // Check if exists
 
-    return this.prismaService.avatarCustomization.update({
+    return this.prismaService.avatar_customizations.update({
       where: { id },
       data: updateCustomizationDto,
     });
@@ -46,7 +46,7 @@ export class CustomizationsService {
   async remove(userId: string, id: string) {
     await this.findOne(userId, id); // Check if exists
 
-    await this.prismaService.avatarCustomization.delete({
+    await this.prismaService.avatar_customizations.delete({
       where: { id },
     });
 

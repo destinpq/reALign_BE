@@ -85,7 +85,7 @@ export class PhotosService {
       );
 
       // Save to database
-      const photo = await this.prismaService.photo.create({
+      const photo = await this.prismaService.photos.create({
         data: {
           userId,
           filename,
@@ -120,13 +120,13 @@ export class PhotosService {
     const skip = (page - 1) * limit;
 
     const [photos, total] = await Promise.all([
-      this.prismaService.photo.findMany({
+      this.prismaService.photos.findMany({
         where: { userId },
         orderBy: { createdAt: 'desc' },
         skip,
         take: limit,
       }),
-      this.prismaService.photo.count({
+      this.prismaService.photos.count({
         where: { userId },
       }),
     ]);
@@ -143,7 +143,7 @@ export class PhotosService {
   }
 
   async findOne(userId: string, id: string) {
-    const photo = await this.prismaService.photo.findFirst({
+    const photo = await this.prismaService.photos.findFirst({
       where: { id, userId },
     });
 
@@ -155,7 +155,7 @@ export class PhotosService {
   }
 
   async findOnePublic(id: string) {
-    const photo = await this.prismaService.photo.findFirst({
+    const photo = await this.prismaService.photos.findFirst({
       where: { 
         id,
         userId: 'public' // Only public uploads
@@ -169,7 +169,7 @@ export class PhotosService {
     return photo;
   }
 
-  async getSignedUrl(userId: string, id: string, expiresIn = 3600) {
+  async getSignedUrl(userId: string,  expiresIn = 3600) {
     const photo = await this.findOne(userId, id);
 
     const command = new GetObjectCommand({
@@ -180,10 +180,10 @@ export class PhotosService {
     return getSignedUrl(this.s3Client, command, { expiresIn });
   }
 
-  async update(userId: string, id: string, updatePhotoDto: UpdatePhotoDto) {
+  async update(userId: string,  updatePhotoDto: UpdatePhotoDto) {
     await this.findOne(userId, id); // Check if exists
 
-    return this.prismaService.photo.update({
+    return this.prismaService.photos.update({
       where: { id },
       data: updatePhotoDto,
     });
@@ -205,7 +205,7 @@ export class PhotosService {
     }
 
     // Delete from database
-    await this.prismaService.photo.delete({
+    await this.prismaService.photos.delete({
       where: { id },
     });
 
@@ -276,14 +276,14 @@ export class PhotosService {
       }
 
       // Find or create system user for public uploads
-      let systemUser = await this.prismaService.user.findUnique({
+      let systemUser = await this.prismaService.users.findUnique({
         where: { email: 'system@realign.com' }
       });
       
       if (!systemUser) {
         // Create system user if it doesn't exist
         // bcrypt imported at top
-        systemUser = await this.prismaService.user.create({
+        systemUser = await this.prismaService.users.create({
           data: {
             email: 'system@realign.com',
             password: await bcrypt.hash('SystemUser123!', 12),
@@ -295,7 +295,7 @@ export class PhotosService {
       }
 
       // Save minimal metadata to database - NO BLOB STORAGE
-      const photo = await this.prismaService.photo.create({
+      const photo = await this.prismaService.photos.create({
         data: {
           userId: systemUser.id,
           filename,
@@ -370,14 +370,14 @@ export class PhotosService {
       }
 
       // Find or create system user for public uploads
-      let systemUser = await this.prismaService.user.findUnique({
+      let systemUser = await this.prismaService.users.findUnique({
         where: { email: 'system@realign.com' }
       });
       
       if (!systemUser) {
         // Create system user if it doesn't exist
         // bcrypt imported at top
-        systemUser = await this.prismaService.user.create({
+        systemUser = await this.prismaService.users.create({
           data: {
             email: 'system@realign.com',
             password: await bcrypt.hash('SystemUser123!', 12),
@@ -389,7 +389,7 @@ export class PhotosService {
       }
 
       // Save minimal metadata to database - NO BLOB STORAGE
-      const photo = await this.prismaService.photo.create({
+      const photo = await this.prismaService.photos.create({
         data: {
           userId: systemUser.id,
           filename,
@@ -433,7 +433,7 @@ export class PhotosService {
     try {
       // Find the photo by S3 URL
       const urlFilename = imageUrl.split('/').pop();
-      const photo = await this.prismaService.photo.findFirst({
+      const photo = await this.prismaService.photos.findFirst({
         where: {
           OR: [
             { s3Key: { contains: urlFilename } },
@@ -456,7 +456,7 @@ export class PhotosService {
           analyzedAt: new Date().toISOString()
         });
 
-        await this.prismaService.photo.update({
+        await this.prismaService.photos.update({
           where: { id: photo.id },
           data: {
             description: `AI_ANALYSIS: ${analysisJson}`
@@ -476,7 +476,7 @@ export class PhotosService {
   // Clear AI analysis results from database
   async clearAnalysisResult(photoId: string): Promise<void> {
     try {
-      await this.prismaService.photo.update({
+      await this.prismaService.photos.update({
         where: { id: photoId },
         data: {
           description: null // Clear the description field that contains AI analysis
@@ -493,7 +493,7 @@ export class PhotosService {
   // Find photo by S3 key
   async findByS3Key(s3Key: string) {
     try {
-      const photo = await this.prismaService.photo.findFirst({
+      const photo = await this.prismaService.photos.findFirst({
         where: {
           s3Key: {
             contains: s3Key

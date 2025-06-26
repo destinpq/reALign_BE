@@ -66,7 +66,7 @@ export class AdminController {
   @ApiResponse({ status: 201, description: 'Admin created successfully' })
   @HttpCode(HttpStatus.CREATED)
   async createAdmin(@Body() createAdminDto: CreateAdminDto, @Request() req) {
-    return this.adminService.createAdmin(createAdminDto, req.user.id);
+    return this.adminService.createAdmin(createAdminDto, req.users.id);
   }
 
   @Get('system-stats')
@@ -97,14 +97,14 @@ export class AdminController {
     @Body() updateUserStatusDto: UpdateUserStatusDto,
     @Request() req,
   ) {
-    return this.adminService.updateUserStatus(updateUserStatusDto, req.user.id);
+    return this.adminService.updateUserStatus(updateUserStatusDto, req.users.id);
   }
 
   @Post('users/award-credits')
   @ApiOperation({ summary: 'Award credits to a user' })
   @ApiResponse({ status: 200, description: 'Credits awarded successfully' })
   async awardCredits(@Body() awardCreditsDto: AwardCreditsDto, @Request() req) {
-    return this.adminService.awardCredits(awardCreditsDto, req.user.id);
+    return this.adminService.awardCredits(awardCreditsDto, req.users.id);
   }
 
   @Get('payments/analytics')

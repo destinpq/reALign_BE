@@ -24,13 +24,13 @@ export class WearablesService {
     }
 
     const [wearables, total] = await Promise.all([
-      this.prisma.wearableItem.findMany({
+      this.prisma.wearable_items.findMany({
         where,
         orderBy: { createdAt: 'desc' },
         skip: (page - 1) * limit,
         take: limit,
         select: {
-          id: true,
+          
           category: true,
           name: true,
           description: true,
@@ -39,12 +39,12 @@ export class WearablesService {
           createdAt: true,
           _count: {
             select: {
-              userSelections: true,
+              user_wearable_selections: true,
             },
           },
         },
       }),
-      this.prisma.wearableItem.count({ where }),
+      this.prisma.wearable_items.count({ where }),
     ]);
 
     return {
@@ -59,12 +59,12 @@ export class WearablesService {
   }
 
   async getWearableById(id: string) {
-    const wearable = await this.prisma.wearableItem.findUnique({
+    const wearable = await this.prisma.wearable_items.findUnique({
       where: { id },
       include: {
         _count: {
           select: {
-            userSelections: true,
+            user_wearable_selections: true,
           },
         },
       },
@@ -78,7 +78,7 @@ export class WearablesService {
   }
 
   async getCategories() {
-    const categories = await this.prisma.wearableItem.groupBy({
+    const categories = await this.prisma.wearable_items.groupBy({
       by: ['category'],
       where: { isActive: true },
       _count: {
@@ -97,7 +97,7 @@ export class WearablesService {
 
   async createWearable(createWearableDto: CreateWearableDto) {
     // Check if ID already exists
-    const existing = await this.prisma.wearableItem.findUnique({
+    const existing = await this.prisma.wearable_items.findUnique({
       where: { id: createWearableDto.id },
     });
 
@@ -105,13 +105,13 @@ export class WearablesService {
       throw new ConflictException('Wearable with this ID already exists');
     }
 
-    return this.prisma.wearableItem.create({
+    return this.prisma.wearable_items.create({
       data: createWearableDto,
     });
   }
 
-  async updateWearable(id: string, updateWearableDto: UpdateWearableDto) {
-    const wearable = await this.prisma.wearableItem.findUnique({
+  async updateWearable( updateWearableDto: UpdateWearableDto) {
+    const wearable = await this.prisma.wearable_items.findUnique({
       where: { id },
     });
 
@@ -119,14 +119,14 @@ export class WearablesService {
       throw new NotFoundException('Wearable item not found');
     }
 
-    return this.prisma.wearableItem.update({
+    return this.prisma.wearable_items.update({
       where: { id },
       data: updateWearableDto,
     });
   }
 
   async deleteWearable(id: string) {
-    const wearable = await this.prisma.wearableItem.findUnique({
+    const wearable = await this.prisma.wearable_items.findUnique({
       where: { id },
     });
 
@@ -134,14 +134,14 @@ export class WearablesService {
       throw new NotFoundException('Wearable item not found');
     }
 
-    return this.prisma.wearableItem.delete({
+    return this.prisma.wearable_items.delete({
       where: { id },
     });
   }
 
   async selectWearables(userId: string, wearableIds: string[]) {
     // Verify all wearable IDs exist
-    const wearables = await this.prisma.wearableItem.findMany({
+    const wearables = await this.prisma.wearable_items.findMany({
       where: { id: { in: wearableIds }, isActive: true },
     });
 
@@ -150,12 +150,12 @@ export class WearablesService {
     }
 
     // Remove existing selections for this user
-    await this.prisma.userWearableSelection.deleteMany({
+    await this.prisma.user_wearable_selections.deleteMany({
       where: { userId },
     });
 
     // Create new selections
-    const selections = await this.prisma.userWearableSelection.createMany({
+    const selections = await this.prisma.user_wearable_selections.createMany({
       data: wearableIds.map(wearableItemId => ({
         userId,
         wearableItemId,
@@ -166,12 +166,12 @@ export class WearablesService {
   }
 
   async getUserSelections(userId: string) {
-    return this.prisma.userWearableSelection.findMany({
+    return this.prisma.user_wearable_selections.findMany({
       where: { userId },
       include: {
-        wearableItem: {
+        wearable_items: {
           select: {
-            id: true,
+            
             category: true,
             name: true,
             description: true,
@@ -184,7 +184,7 @@ export class WearablesService {
   }
 
   async removeUserSelection(userId: string, wearableId: string) {
-    const selection = await this.prisma.userWearableSelection.findUnique({
+    const selection = await this.prisma.user_wearable_selections.findUnique({
       where: {
         userId_wearableItemId: {
           userId,
@@ -197,7 +197,7 @@ export class WearablesService {
       throw new NotFoundException('Selection not found');
     }
 
-    return this.prisma.userWearableSelection.delete({
+    return this.prisma.user_wearable_selections.delete({
       where: {
         userId_wearableItemId: {
           userId,
@@ -209,7 +209,7 @@ export class WearablesService {
 
   async bulkCreateWearables(wearables: CreateWearableDto[]) {
     // Get existing IDs to avoid duplicates
-    const existingIds = await this.prisma.wearableItem.findMany({
+    const existingIds = await this.prisma.wearable_items.findMany({
       where: {
         id: {
           in: wearables.map(w => w.id),
@@ -225,7 +225,7 @@ export class WearablesService {
       return { created: 0, skipped: wearables.length };
     }
 
-    const result = await this.prisma.wearableItem.createMany({
+    const result = await this.prisma.wearable_items.createMany({
       data: newWearables.map(w => ({
         ...w,
         name: w.name, // Map to wearableName in DB
@@ -241,7 +241,7 @@ export class WearablesService {
 
   async importFromCSV(csvData: Array<{ ID: string; Category: string; 'Wearable Item': string }>) {
     const wearables = csvData.map(row => ({
-      id: row.ID,
+      
       category: row.Category,
       name: row['Wearable Item'],
     }));
@@ -265,7 +265,7 @@ export class WearablesService {
     return this.getWearableById(id);
   }
 
-  async update(id: string, updateWearableDto: any) {
+  async update( updateWearableDto: any) {
     return this.updateWearable(id, updateWearableDto);
   }
 

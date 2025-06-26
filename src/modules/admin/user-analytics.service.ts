@@ -77,10 +77,10 @@ export class UserAnalyticsService {
   async getUserActivitySummary(userId: string): Promise<UserActivitySummary> {
     try {
       // Get user basic info
-      const user = await this.prismaService.user.findUnique({
+      const user = await this.prismaService.users.findUnique({
         where: { id: userId },
         select: {
-          id: true,
+          
           email: true,
           firstName: true,
           lastName: true,
@@ -106,7 +106,7 @@ export class UserAnalyticsService {
         recentActivity,
       ] = await Promise.all([
         // Login count
-        this.prismaService.auditLog.count({
+        this.prismaService.audit_logs.count({
           where: {
             userId,
             action: { in: ['auth.login', 'auth.token_refresh'] },
@@ -114,14 +114,14 @@ export class UserAnalyticsService {
         }),
 
         // Payment statistics
-        this.prismaService.payment.aggregate({
+        this.prismaService.payments.aggregate({
           where: { userId },
           _count: { id: true },
           _sum: { amount: true, creditsAwarded: true },
         }),
 
         // Processing job statistics
-        this.prismaService.processingJob.groupBy({
+        this.prismaService.processing_jobs.groupBy({
           by: ['status'],
           where: {
             userId,
@@ -132,7 +132,7 @@ export class UserAnalyticsService {
         }),
 
         // Violation statistics
-        this.prismaService.auditLog.aggregate({
+        this.prismaService.audit_logs.aggregate({
           where: {
             userId,
             action: 'content.violation_detected',
@@ -141,7 +141,7 @@ export class UserAnalyticsService {
         }),
 
         // Recent activity (last 50 actions)
-        this.prismaService.auditLog.findMany({
+        this.prismaService.audit_logs.findMany({
           where: { userId },
           orderBy: { createdAt: 'desc' },
           take: 50,
@@ -161,7 +161,7 @@ export class UserAnalyticsService {
       const totalCreditsUsed = processingJobStats.reduce((sum, stat) => sum + (stat._sum.creditsUsed || 0), 0);
 
       // Get high-risk violations
-      const highRiskViolations = await this.prismaService.auditLog.count({
+      const highRiskViolations = await this.prismaService.audit_logs.count({
         where: {
           userId,
           action: 'content.violation_detected',
@@ -234,24 +234,24 @@ export class UserAnalyticsService {
         topViolators,
       ] = await Promise.all([
         // Total users
-        this.prismaService.user.count(),
+        this.prismaService.users.count(),
 
         // Active users (logged in last 7 days)
-        this.prismaService.user.count({
+        this.prismaService.users.count({
           where: {
             lastLoginAt: { gte: sevenDaysAgo },
           },
         }),
 
         // New users today
-        this.prismaService.user.count({
+        this.prismaService.users.count({
           where: {
             createdAt: { gte: today },
           },
         }),
 
         // User activity counts
-        this.prismaService.auditLog.groupBy({
+        this.prismaService.audit_logs.groupBy({
           by: ['userId'],
           where: {
             createdAt: { gte: sevenDaysAgo },
@@ -263,7 +263,7 @@ export class UserAnalyticsService {
         }),
 
         // Content moderation stats
-        this.prismaService.auditLog.aggregate({
+        this.prismaService.audit_logs.aggregate({
           where: {
             action: { in: ['content.moderation_check', 'content.violation_detected'] },
             createdAt: { gte: sevenDaysAgo },
@@ -272,7 +272,7 @@ export class UserAnalyticsService {
         }),
 
         // Top violators
-        this.prismaService.auditLog.groupBy({
+        this.prismaService.audit_logs.groupBy({
           by: ['userId'],
           where: {
             action: 'content.violation_detected',
@@ -287,10 +287,10 @@ export class UserAnalyticsService {
 
       // Get top active users with details
       const topActiveUserIds = userActivityCounts.slice(0, 10).map(u => u.userId).filter(Boolean);
-      const topActiveUsersDetails = await this.prismaService.user.findMany({
+      const topActiveUsersDetails = await this.prismaService.users.findMany({
         where: { id: { in: topActiveUserIds as string[] } },
         select: {
-          id: true,
+          
           email: true,
           firstName: true,
           lastName: true,
@@ -320,14 +320,14 @@ export class UserAnalyticsService {
       };
 
       // Get violation statistics
-      const totalViolations = await this.prismaService.auditLog.count({
+      const totalViolations = await this.prismaService.audit_logs.count({
         where: {
           action: 'content.violation_detected',
           createdAt: { gte: sevenDaysAgo },
         },
       });
 
-      const totalModerationChecks = await this.prismaService.auditLog.count({
+      const totalModerationChecks = await this.prismaService.audit_logs.count({
         where: {
           action: 'content.moderation_check',
           createdAt: { gte: sevenDaysAgo },
@@ -336,9 +336,9 @@ export class UserAnalyticsService {
 
       // Get top violators with details
       const topViolatorIds = topViolators.map(v => v.userId).filter(Boolean);
-      const topViolatorsDetails = await this.prismaService.user.findMany({
+      const topViolatorsDetails = await this.prismaService.users.findMany({
         where: { id: { in: topViolatorIds as string[] } },
-        select: { id: true, email: true },
+        select: {  email: true },
       });
 
       const topViolatorsWithDetails = topViolatorIds.map(userId => {
@@ -376,7 +376,7 @@ export class UserAnalyticsService {
       const startDate = new Date();
       startDate.setDate(startDate.getDate() - days);
 
-      const activities = await this.prismaService.auditLog.findMany({
+      const activities = await this.prismaService.audit_logs.findMany({
         where: {
           userId,
           createdAt: { gte: startDate },
@@ -420,7 +420,7 @@ export class UserAnalyticsService {
 
       switch (metric) {
         case 'logins':
-          query = this.prismaService.auditLog.groupBy({
+          query = this.prismaService.audit_logs.groupBy({
             by: ['userId'],
             where: {
               action: { in: ['auth.login', 'auth.token_refresh'] },
@@ -433,7 +433,7 @@ export class UserAnalyticsService {
           break;
 
         case 'payments':
-          query = this.prismaService.payment.groupBy({
+          query = this.prismaService.payments.groupBy({
             by: ['userId'],
             _count: { userId: true },
             _sum: { amount: true },
@@ -443,7 +443,7 @@ export class UserAnalyticsService {
           break;
 
         case 'headshots':
-          query = this.prismaService.processingJob.groupBy({
+          query = this.prismaService.processing_jobs.groupBy({
             by: ['userId'],
             where: { type: 'HEADSHOT_GENERATION' },
             _count: { userId: true },
@@ -453,7 +453,7 @@ export class UserAnalyticsService {
           break;
 
         case 'violations':
-          query = this.prismaService.auditLog.groupBy({
+          query = this.prismaService.audit_logs.groupBy({
             by: ['userId'],
             where: {
               action: 'content.violation_detected',
@@ -473,10 +473,10 @@ export class UserAnalyticsService {
       
       // Get user details
       const userIds = results.map((r: any) => r.userId).filter(Boolean);
-      const users = await this.prismaService.user.findMany({
+      const users = await this.prismaService.users.findMany({
         where: { id: { in: userIds } },
         select: {
-          id: true,
+          
           email: true,
           firstName: true,
           lastName: true,

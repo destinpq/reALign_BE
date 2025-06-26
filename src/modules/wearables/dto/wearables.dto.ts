@@ -57,8 +57,8 @@ export class SelectWearableDto {
 export class BulkCreateWearableDto {
   @ApiProperty({
     example: [
-      { id: 'W00001', category: 'Tops', name: 'Striped Polo Shirt' },
-      { id: 'W00002', category: 'Tops', name: 'Anime Logo Tee' },
+      {  category: 'Tops', name: 'Striped Polo Shirt' },
+      {  category: 'Tops', name: 'Anime Logo Tee' },
     ]
   })
   @IsArray()

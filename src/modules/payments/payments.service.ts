@@ -41,8 +41,8 @@ export class PaymentsService {
 
     try {
       this.razorpay = new Razorpay({
-        key_id: keyId,
-        key_secret: keySecret,
+        key_id
+        key_idsecret: keySecret,
       });
       this.logger.log('✅ Razorpay initialized successfully in LIVE mode');
       this.logger.log(`🔑 Using Razorpay Key ID: ${keyId}`);
@@ -95,7 +95,7 @@ export class PaymentsService {
       this.logger.log(`✅ Live Razorpay order created: ${razorpayOrder.id} for ₹${finalAmount/100}`);
 
       // Save payment record in database
-      const payment = await this.prismaService.payment.create({
+      const payment = await this.prismaService.payments.create({
         data: {
           userId,
           razorpayOrderId: razorpayOrder.id,
@@ -127,7 +127,7 @@ export class PaymentsService {
       this.logger.log(`Payment order created: ${payment.id} for user ${userId}`);
 
       return {
-        id: payment.id,
+        
         razorpayOrderId: razorpayOrder.id,
         amount: finalAmount,
         currency: createOrderDto.currency,
@@ -165,12 +165,12 @@ export class PaymentsService {
       this.logger.log(`✅ Live Razorpay payment verified: ${razorpayPayment.id} - ₹${Number(razorpayPayment.amount)/100}`);
 
       // Find payment record
-      const payment = await this.prismaService.payment.findFirst({
+      const payment = await this.prismaService.payments.findFirst({
         where: {
           userId,
           razorpayOrderId: verifyPaymentDto.razorpayOrderId,
         },
-        include: { user: true },
+        include: { users: true },
       });
 
       if (!payment) {
@@ -182,7 +182,7 @@ export class PaymentsService {
       }
 
       // Update payment status
-      const updatedPayment = await this.prismaService.payment.update({
+      const updatedPayment = await this.prismaService.payments.update({
         where: { id: payment.id },
         data: {
           razorpayPaymentId: verifyPaymentDto.razorpayPaymentId,
@@ -197,7 +197,7 @@ export class PaymentsService {
       });
 
       // Award credits to user
-      await this.prismaService.user.update({
+      await this.prismaService.users.update({
         where: { id: userId },
         data: {
           credits: {
@@ -227,7 +227,7 @@ export class PaymentsService {
 
       // Send confirmation email
       await this.emailService.sendPaymentConfirmation(
-        payment.user.email,
+        payment.users.email,
         {
           paymentId: payment.id,
           amount: Number(payment.amount),
@@ -275,9 +275,9 @@ export class PaymentsService {
   }) {
     try {
       // 🔥 VERIFY USER EXISTS FIRST!
-      const user = await this.prismaService.user.findUnique({
+      const user = await this.prismaService.users.findUnique({
         where: { id: paymentData.userId },
-        select: { id: true, email: true }
+        select: {  email: true }
       });
 
       if (!user) {
@@ -287,7 +287,7 @@ export class PaymentsService {
       this.logger.log(`🔐 VERIFIED USER FOR PAYMENT: ${user.email} (${user.id})`);
 
       // Store payment data in database immediately
-      const payment = await this.prismaService.payment.create({
+      const payment = await this.prismaService.payments.create({
         data: {
           userId: paymentData.userId, // 🔥 USE REAL USER ID!
           razorpayPaymentId: paymentData.razorpayPaymentId,
@@ -323,7 +323,7 @@ export class PaymentsService {
   }) {
     try {
       // Store avatar generation data in database
-      const avatarGeneration = await this.prismaService.avatarGeneration.create({
+      const avatarGeneration = await this.prismaService.avatar_generations.create({
         data: {
           sessionId: avatarData.sessionId,
           userImage: avatarData.userImage,
@@ -347,7 +347,7 @@ export class PaymentsService {
   async updateAvatarGenerationStatus(sessionId: string, status: string, paymentId?: string) {
     try {
       // First check if the record exists
-      const existing = await this.prismaService.avatarGeneration.findUnique({
+      const existing = await this.prismaService.avatar_generations.findUnique({
         where: { sessionId },
       });
 
@@ -358,14 +358,14 @@ export class PaymentsService {
 
       const updateData: any = {
         status,
-        updatedAt: new Date(),
+        
       };
 
       if (paymentId) {
         updateData.paymentId = paymentId;
       }
 
-      const updated = await this.prismaService.avatarGeneration.update({
+      const updated = await this.prismaService.avatar_generations.update({
         where: { sessionId },
         data: updateData,
       });
@@ -380,7 +380,7 @@ export class PaymentsService {
 
   async getAvatarGenerationBySession(sessionId: string) {
     try {
-      const avatarGeneration = await this.prismaService.avatarGeneration.findUnique({
+      const avatarGeneration = await this.prismaService.avatar_generations.findUnique({
         where: { sessionId },
       });
 
@@ -401,13 +401,13 @@ export class PaymentsService {
     const skip = (page - 1) * limit;
 
     const [payments, total] = await Promise.all([
-      this.prismaService.payment.findMany({
+      this.prismaService.payments.findMany({
         where: { userId },
         orderBy: { createdAt: 'desc' },
         skip,
         take: limit,
         select: {
-          id: true,
+          
           razorpayOrderId: true,
           razorpayPaymentId: true,
           amount: true,
@@ -417,10 +417,10 @@ export class PaymentsService {
           description: true,
           creditsAwarded: true,
           createdAt: true,
-          updatedAt: true,
+          
         },
       }),
-      this.prismaService.payment.count({
+      this.prismaService.payments.count({
         where: { userId },
       }),
     ]);
@@ -437,7 +437,7 @@ export class PaymentsService {
   }
 
   async hasValidSubscription(userId: string): Promise<boolean> {
-    const subscription = await this.prismaService.subscription.findFirst({
+    const subscription = await this.prismaService.subscriptions.findFirst({
       where: {
         userId,
         status: SubscriptionStatus.ACTIVE,
@@ -463,7 +463,7 @@ export class PaymentsService {
       const twentyFourHoursAgo = new Date();
       twentyFourHoursAgo.setHours(twentyFourHoursAgo.getHours() - 24);
 
-      const recentPayment = await this.prismaService.payment.findFirst({
+      const recentPayment = await this.prismaService.payments.findFirst({
         where: {
           userId,
           status: PaymentStatus.COMPLETED,
@@ -485,7 +485,7 @@ export class PaymentsService {
         return {
           hasValidPayment: true,
           paymentDetails: {
-            id: recentPayment.razorpayPaymentId,
+            
             amount: Number(recentPayment.amount) / 100, // Convert from paise
             currency: recentPayment.currency,
             completedAt: recentPayment.updatedAt,
@@ -506,7 +506,7 @@ export class PaymentsService {
 
   async deductCredits(userId: string, amount: number): Promise<boolean> {
     try {
-      const user = await this.prismaService.user.findUnique({
+      const user = await this.prismaService.users.findUnique({
         where: { id: userId },
         select: { credits: true },
       });
@@ -515,7 +515,7 @@ export class PaymentsService {
         return false;
       }
 
-      await this.prismaService.user.update({
+      await this.prismaService.users.update({
         where: { id: userId },
         data: {
           credits: {
@@ -562,7 +562,7 @@ export class PaymentsService {
     const endDate = new Date();
     endDate.setMonth(endDate.getMonth() + 1); // 1 month subscription
 
-    await this.prismaService.subscription.create({
+    await this.prismaService.subscriptions.create({
       data: {
         userId,
         type: subscriptionType,
@@ -571,7 +571,7 @@ export class PaymentsService {
       },
     });
 
-    await this.prismaService.user.update({
+    await this.prismaService.users.update({
       where: { id: userId },
       data: {
         subscriptionType,

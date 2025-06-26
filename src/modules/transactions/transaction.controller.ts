@@ -41,7 +41,7 @@ export class TransactionController {
   @ApiOperation({ summary: 'Create a new transaction' })
   @ApiResponse({ status: 201, description: 'Transaction created successfully' })
   async createTransaction(@Body() createTransactionDto: CreateTransactionDto, @Request() req: any) {
-    return this.transactionService.createTransaction(createTransactionDto, req.user.id);
+    return this.transactionService.createTransaction(createTransactionDto, req.users.id);
   }
 
   @Get(':transactionId')
@@ -61,7 +61,7 @@ export class TransactionController {
     @Body() updateTransactionDto: UpdateTransactionDto,
     @Request() req: any
   ) {
-    return this.transactionService.updateTransaction(transactionId, updateTransactionDto, req.user.id);
+    return this.transactionService.updateTransaction(transactionId, updateTransactionDto, req.users.id);
   }
 
   @Get()
@@ -115,8 +115,8 @@ export class TransactionController {
     };
 
     // Non-admin users can only see their own transactions
-    if (!['ADMIN', 'SUPER_ADMIN'].includes(req.user.role)) {
-      filters.userId = req.user.id;
+    if (!['ADMIN', 'SUPER_ADMIN'].includes(req.users.role)) {
+      filters.userId = req.users.id;
     }
 
     return this.transactionService.getTransactions(filters, page, limit);
@@ -148,7 +148,7 @@ export class TransactionController {
     @Query('status') status?: TransactionStatus
   ) {
     const filters: TransactionFilters = {
-      userId: req.user.id,
+      userId: req.users.id,
       type,
       status,
     };
@@ -273,7 +273,7 @@ export class TransactionController {
     @Body() body: { reason: string },
     @Request() req: any
   ) {
-    await this.transactionService.flagTransactionForReview(transactionId, body.reason, req.user.id);
+    await this.transactionService.flagTransactionForReview(transactionId, body.reason, req.users.id);
     return { message: 'Transaction flagged for review successfully' };
   }
 
@@ -295,7 +295,7 @@ export class TransactionController {
       transactionId,
       body.amount,
       body.reason,
-      req.user.id
+      req.users.id
     );
   }
 
@@ -315,7 +315,7 @@ export class TransactionController {
     return this.transactionService.bulkUpdateTransactions(
       body.transactionIds,
       body.updateData,
-      req.user.id
+      req.users.id
     );
   }
 
@@ -418,7 +418,7 @@ export class TransactionController {
     @Ip() ipAddress: string
   ) {
     try {
-      await this.transactionLogService.logTransaction(req.user.id, {
+      await this.transactionLogService.logTransaction(req.users.id, {
         action: actionData.action,
         details: actionData.details,
         userAgent: actionData.userAgent || req.get('User-Agent'),

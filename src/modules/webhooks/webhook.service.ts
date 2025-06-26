@@ -86,7 +86,7 @@ export class WebhookService {
 
   async logWebhookDelivery(log: WebhookDeliveryLog): Promise<void> {
     try {
-      await this.prisma.webhookDelivery.create({
+      await this.prisma.webhook_deliveries.create({
         data: {
           webhookEndpointId: 'system', // Use system for internal logging
           eventType: log.eventType,
@@ -109,7 +109,7 @@ export class WebhookService {
   // ========================================
 
   async createWebhookEndpoint(url: string, events: string[], secret?: string, description?: string): Promise<any> {
-    return this.prisma.webhookEndpoint.create({
+    return this.prisma.webhook_endpoints.create({
       data: {
         url,
         secret: secret || crypto.randomBytes(32).toString('hex'),
@@ -121,10 +121,10 @@ export class WebhookService {
   }
 
   async getWebhookEndpoints(): Promise<any[]> {
-    return this.prisma.webhookEndpoint.findMany({
+    return this.prisma.webhook_endpoints.findMany({
       where: { isActive: true },
       include: {
-        deliveries: {
+        webhook_deliveries: {
           take: 5,
           orderBy: { createdAt: 'desc' },
         },
@@ -132,15 +132,15 @@ export class WebhookService {
     });
   }
 
-  async updateWebhookEndpoint(id: string, updates: any): Promise<any> {
-    return this.prisma.webhookEndpoint.update({
+  async updateWebhookEndpoint( updates: any): Promise<any> {
+    return this.prisma.webhook_endpoints.update({
       where: { id },
       data: updates,
     });
   }
 
   async deleteWebhookEndpoint(id: string): Promise<void> {
-    await this.prisma.webhookEndpoint.update({
+    await this.prisma.webhook_endpoints.update({
       where: { id },
       data: { isActive: false },
     });
@@ -153,12 +153,12 @@ export class WebhookService {
   async getWebhookDeliveries(endpointId?: string, limit = 50): Promise<any[]> {
     const where = endpointId ? { webhookEndpointId: endpointId } : {};
 
-    return this.prisma.webhookDelivery.findMany({
+    return this.prisma.webhook_deliveries.findMany({
       where,
       take: limit,
       orderBy: { createdAt: 'desc' },
       include: {
-        webhookEndpoint: {
+        webhook_endpoints: {
           select: {
             url: true,
             description: true,
@@ -169,9 +169,9 @@ export class WebhookService {
   }
 
   async retryWebhookDelivery(deliveryId: string): Promise<void> {
-    const delivery = await this.prisma.webhookDelivery.findUnique({
+    const delivery = await this.prisma.webhook_deliveries.findUnique({
       where: { id: deliveryId },
-      include: { webhookEndpoint: true },
+      include: { webhook_endpoints: true },
     });
 
     if (!delivery) {
@@ -185,7 +185,7 @@ export class WebhookService {
     // TODO: Implement actual webhook delivery logic
     // This would involve making HTTP requests to the webhook endpoints
 
-    await this.prisma.webhookDelivery.update({
+    await this.prisma.webhook_deliveries.update({
       where: { id: deliveryId },
       data: {
         attempts: { increment: 1 },
@@ -215,29 +215,29 @@ export class WebhookService {
       deliveriesByEvent,
       recentDeliveries
     ] = await Promise.all([
-      this.prisma.webhookDelivery.count({ where }),
-      this.prisma.webhookDelivery.count({ where: { ...where, status: 'DELIVERED' } }),
-      this.prisma.webhookDelivery.count({ where: { ...where, status: 'FAILED' } }),
-      this.prisma.webhookDelivery.groupBy({
+      this.prisma.webhook_deliveries.count({ where }),
+      this.prisma.webhook_deliveries.count({ where: { ...where, status: 'DELIVERED' } }),
+      this.prisma.webhook_deliveries.count({ where: { ...where, status: 'FAILED' } }),
+      this.prisma.webhook_deliveries.groupBy({
         by: ['webhookEndpointId'],
         where,
         _count: { webhookEndpointId: true },
         orderBy: { _count: { webhookEndpointId: 'desc' } },
         take: 10,
       }),
-      this.prisma.webhookDelivery.groupBy({
+      this.prisma.webhook_deliveries.groupBy({
         by: ['eventType'],
         where,
         _count: { eventType: true },
         orderBy: { _count: { eventType: 'desc' } },
         take: 10,
       }),
-      this.prisma.webhookDelivery.findMany({
+      this.prisma.webhook_deliveries.findMany({
         where,
         take: 20,
         orderBy: { createdAt: 'desc' },
         include: {
-          webhookEndpoint: {
+          webhook_endpoints: {
             select: { url: true, description: true },
           },
         },
@@ -266,7 +266,7 @@ export class WebhookService {
   // ========================================
 
   async testWebhookEndpoint(endpointId: string, testPayload?: any): Promise<any> {
-    const endpoint = await this.prisma.webhookEndpoint.findUnique({
+    const endpoint = await this.prisma.webhook_endpoints.findUnique({
       where: { id: endpointId },
     });
 
@@ -342,7 +342,7 @@ export class WebhookService {
 
   async verifyPaymentForUser(paymentId: string, email?: string): Promise<any> {
     try {
-      const payment = await this.prisma.payment.findFirst({
+      const payment = await this.prisma.payments.findFirst({
         where: {
           razorpayPaymentId: paymentId,
           status: 'COMPLETED',
@@ -371,7 +371,7 @@ export class WebhookService {
       return {
         verified: true,
         payment: {
-          id: payment.razorpayPaymentId,
+          
           amount: payment.amount,
           currency: payment.currency,
           method: payment.method,

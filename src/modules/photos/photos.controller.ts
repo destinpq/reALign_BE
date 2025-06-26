@@ -103,7 +103,7 @@ export class PhotosController {
     @UploadedFile() file: Express.Multer.File,
     @Body() createPhotoDto: CreatePhotoDto,
   ) {
-    return this.photosService.upload(req.user.userId, file, createPhotoDto);
+    return this.photosService.upload(req.users.userId, file, createPhotoDto);
   }
 
   // Public upload endpoint for avatar generation (no auth required)
@@ -151,7 +151,7 @@ export class PhotosController {
       return {
         success: true,
         data: {
-          id: result.id,
+          
           url: result.publicUrl,
           filename: result.filename,
           originalFilename: result.originalFilename,
@@ -199,7 +199,7 @@ export class PhotosController {
     return {
       success: true,
       data: {
-        id: result.id,
+        
         url: result.publicUrl || `${process.env.API_BASE_URL || 'https://realign-api.destinpq.com'}/api/v1/photos/${result.id}/view`,
         filename: result.filename,
       }
@@ -218,7 +218,7 @@ export class PhotosController {
     @Query('page') page?: number,
     @Query('limit') limit?: number,
   ) {
-    return this.photosService.findAll(req.user.userId, page, limit);
+    return this.photosService.findAll(req.users.userId, page, limit);
   }
 
   @Get(':id')
@@ -227,8 +227,8 @@ export class PhotosController {
   @ApiOperation({ summary: 'Get a photo by ID' })
   @ApiResponse({ status: 200, description: 'Photo retrieved successfully' })
   @ApiResponse({ status: 404, description: 'Photo not found' })
-  async findOne(@Request() req, @Param('id') id: string) {
-    return this.photosService.findOne(req.user.userId, id);
+  async findOne(@Request() req, @Param("id") id: string) {
+    return this.photosService.findOne(req.users.userId, id);
   }
 
   @Get(':id/url')
@@ -237,8 +237,8 @@ export class PhotosController {
   @ApiOperation({ summary: 'Get a signed URL for a photo' })
   @ApiResponse({ status: 200, description: 'Signed URL generated successfully' })
   @ApiResponse({ status: 404, description: 'Photo not found' })
-  async getSignedUrl(@Request() req, @Param('id') id: string) {
-    const url = await this.photosService.getSignedUrl(req.user.userId, id);
+  async getSignedUrl(@Request() req, @Param("id") id: string) {
+    const url = await this.photosService.getSignedUrl(req.users.userId, id);
     return { url };
   }
 
@@ -250,10 +250,10 @@ export class PhotosController {
   @ApiResponse({ status: 404, description: 'Photo not found' })
   async update(
     @Request() req,
-    @Param('id') id: string,
+    @Param('id') 
     @Body() updatePhotoDto: UpdatePhotoDto,
   ) {
-    return this.photosService.update(req.user.userId, id, updatePhotoDto);
+    return this.photosService.update(req.users.userId, id, updatePhotoDto);
   }
 
   @Delete(':id')
@@ -262,13 +262,13 @@ export class PhotosController {
   @ApiOperation({ summary: 'Delete a photo' })
   @ApiResponse({ status: 200, description: 'Photo deleted successfully' })
   @ApiResponse({ status: 404, description: 'Photo not found' })
-  async remove(@Request() req, @Param('id') id: string) {
-    return this.photosService.remove(req.user.userId, id);
+  async remove(@Request() req, @Param("id") id: string) {
+    return this.photosService.remove(req.users.userId, id);
   }
 
   // Public endpoint - Show uploaded image as actual image (no auth required for public uploads)
   @Get(':id/view')
-  async viewImage(@Param('id') id: string, @Res() res: Response) {
+  async viewImage(@Param('id')  @Res() res: Response) {
     try {
       // First try to find as public upload
       const photo = await this.photosService.findOnePublic(id);
@@ -293,7 +293,7 @@ export class PhotosController {
   @Get(':id/direct')
   @ApiOperation({ summary: 'Get direct image data for Magic Hour API' })
   @ApiResponse({ status: 200, description: 'Raw image data returned' })
-  async directImage(@Param('id') id: string, @Res() res: Response) {
+  async directImage(@Param('id')  @Res() res: Response) {
     try {
       console.log('🖼️ Magic Hour API requesting direct image:', id);
       
@@ -329,12 +329,12 @@ export class PhotosController {
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
   async debugList(@Req() req: any) {
-    const result = await this.photosService.findAll(req.user.id, 1, 50);
+    const result = await this.photosService.findAll(req.users.id, 1, 50);
     
     return {
       ...result,
       photos: result.photos.map(photo => ({
-        id: photo.id,
+        
         filename: photo.filename,
         title: photo.title,
         description: photo.description,
@@ -739,7 +739,7 @@ Use the exact format above. Replace the example values with what you see in the 
   // Placeholder image endpoints for development/testing
   @Get('placeholder/:width/:height')
   async getPlaceholderImage(
-    @Param('width') width: string,
+    @Param("id") id: string,
     @Param('height') height: string,
     @Res() res: Response,
     @Query('text') text?: string,
@@ -771,7 +771,7 @@ Use the exact format above. Replace the example values with what you see in the 
 
   @Get('placeholder/wearable/:id')
   async getWearablePlaceholder(
-    @Param('id') id: string,
+    @Param('id') 
     @Res() res: Response,
   ) {
     try {

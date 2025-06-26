@@ -239,7 +239,7 @@ export class EmailService {
   }) {
     try {
       // Create email notification record
-      const emailNotification = await this.prismaService.emailNotification.create({
+      const emailNotification = await this.prismaService.email_notifications.create({
         data: {
           userId: emailData.userId,
           to: emailData.to,
@@ -257,7 +257,7 @@ export class EmailService {
           this.logger.log(`[MOCK] Would send email: ${emailData.template} to ${emailData.to} with subject: ${emailData.subject}`);
           
           // Update email status to sent (mocked)
-          await this.prismaService.emailNotification.update({
+          await this.prismaService.email_notifications.update({
             where: { id: emailNotification.id },
             data: {
               status: EmailStatus.SENT,
@@ -277,7 +277,7 @@ export class EmailService {
         });
 
         // Update email status to sent
-        await this.prismaService.emailNotification.update({
+        await this.prismaService.email_notifications.update({
           where: { id: emailNotification.id },
           data: {
             status: EmailStatus.SENT,
@@ -290,7 +290,7 @@ export class EmailService {
         return { success: true, emailId: emailNotification.id };
       } catch (error) {
         // Update email status to failed
-        await this.prismaService.emailNotification.update({
+        await this.prismaService.email_notifications.update({
           where: { id: emailNotification.id },
           data: {
             status: EmailStatus.FAILED,
@@ -323,7 +323,7 @@ export class EmailService {
   }
 
   async retryFailedEmails() {
-    const failedEmails = await this.prismaService.emailNotification.findMany({
+    const failedEmails = await this.prismaService.email_notifications.findMany({
       where: {
         status: EmailStatus.FAILED,
         attempts: { lt: 3 }, // Max 3 attempts
@@ -340,7 +340,7 @@ export class EmailService {
           context: email.templateData as { [name: string]: any },
         });
 
-        await this.prismaService.emailNotification.update({
+        await this.prismaService.email_notifications.update({
           where: { id: email.id },
           data: {
             status: EmailStatus.SENT,
@@ -351,7 +351,7 @@ export class EmailService {
 
         this.logger.log(`Retry successful: ${email.template} to ${email.to}`);
       } catch (error) {
-        await this.prismaService.emailNotification.update({
+        await this.prismaService.email_notifications.update({
           where: { id: email.id },
           data: {
             attempts: { increment: 1 },
@@ -381,17 +381,17 @@ export class EmailService {
       pendingEmails,
       emailsByTemplate,
     ] = await Promise.all([
-      this.prismaService.emailNotification.count({ where: whereClause }),
-      this.prismaService.emailNotification.count({
+      this.prismaService.email_notifications.count({ where: whereClause }),
+      this.prismaService.email_notifications.count({
         where: { ...whereClause, status: EmailStatus.SENT },
       }),
-      this.prismaService.emailNotification.count({
+      this.prismaService.email_notifications.count({
         where: { ...whereClause, status: EmailStatus.FAILED },
       }),
-      this.prismaService.emailNotification.count({
+      this.prismaService.email_notifications.count({
         where: { ...whereClause, status: EmailStatus.PENDING },
       }),
-      this.prismaService.emailNotification.groupBy({
+      this.prismaService.email_notifications.groupBy({
         by: ['template'],
         where: whereClause,
         _count: { template: true },

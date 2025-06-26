@@ -37,8 +37,8 @@ export class PaymentOrderService {
 
     try {
       this.razorpay = new Razorpay({
-        key_id: keyId,
-        key_secret: keySecret,
+        key_id
+        key_idsecret: keySecret,
       });
       this.logger.log('✅ Razorpay initialized successfully in PaymentOrderService');
     } catch (error) {
@@ -89,7 +89,7 @@ export class PaymentOrderService {
       this.logger.log(`✅ Live Razorpay order created: ${razorpayOrder.id} for ₹${finalAmount/100}`);
 
       // Save payment record in database
-      const payment = await this.prismaService.payment.create({
+      const payment = await this.prismaService.payments.create({
         data: {
           userId,
           razorpayOrderId: razorpayOrder.id,
@@ -121,7 +121,7 @@ export class PaymentOrderService {
       this.logger.log(`Payment order created: ${payment.id} for user ${userId}`);
 
       return {
-        id: payment.id,
+        
         razorpayOrderId: razorpayOrder.id,
         amount: finalAmount,
         currency: createOrderDto.currency,
@@ -148,9 +148,9 @@ export class PaymentOrderService {
   }) {
     try {
       // Verify user exists first
-      const user = await this.prismaService.user.findUnique({
+      const user = await this.prismaService.users.findUnique({
         where: { id: paymentData.userId },
-        select: { id: true, email: true }
+        select: {  email: true }
       });
 
       if (!user) {
@@ -160,7 +160,7 @@ export class PaymentOrderService {
       this.logger.log(`🔐 VERIFIED USER FOR PAYMENT: ${user.email} (${user.id})`);
 
       // Store payment data in database immediately
-      const payment = await this.prismaService.payment.create({
+      const payment = await this.prismaService.payments.create({
         data: {
           userId: paymentData.userId,
           razorpayPaymentId: paymentData.razorpayPaymentId,
@@ -188,13 +188,13 @@ export class PaymentOrderService {
       const skip = (page - 1) * limit;
       
       const [payments, total] = await Promise.all([
-        this.prismaService.payment.findMany({
+        this.prismaService.payments.findMany({
           where: { userId },
           orderBy: { createdAt: 'desc' },
           skip,
           take: limit,
         }),
-        this.prismaService.payment.count({
+        this.prismaService.payments.count({
           where: { userId },
         }),
       ]);

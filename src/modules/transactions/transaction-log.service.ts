@@ -31,7 +31,7 @@ export class TransactionLogService {
   ): Promise<void> {
     try {
       // Create a transaction entry for logging
-      await this.prisma.transaction.create({
+      await this.prisma.transactions.create({
         data: {
           transactionId: `LOG_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
           type: 'AVATAR_CUSTOMIZATION', // Using existing enum value
@@ -64,13 +64,13 @@ export class TransactionLogService {
     const skip = (page - 1) * limit;
 
     const [transactions, total] = await Promise.all([
-      this.prisma.transaction.findMany({
+      this.prisma.transactions.findMany({
         where: { userId },
         orderBy: { createdAt: 'desc' },
         skip,
         take: limit
       }),
-      this.prisma.transaction.count({
+      this.prisma.transactions.count({
         where: { userId }
       })
     ]);
@@ -94,15 +94,15 @@ export class TransactionLogService {
     const skip = (page - 1) * limit;
 
     const [transactions, total] = await Promise.all([
-      this.prisma.transaction.findMany({
+      this.prisma.transactions.findMany({
         where: { description: action },
         orderBy: { createdAt: 'desc' },
         skip,
         take: limit,
         include: {
-          user: {
+          users: {
             select: {
-              id: true,
+              
               email: true,
               firstName: true,
               lastName: true
@@ -110,7 +110,7 @@ export class TransactionLogService {
           }
         }
       }),
-      this.prisma.transaction.count({
+      this.prisma.transactions.count({
         where: { description: action }
       })
     ]);
@@ -143,8 +143,8 @@ export class TransactionLogService {
       actionCounts,
       recentTransactions
     ] = await Promise.all([
-      this.prisma.transaction.count({ where }),
-      this.prisma.transaction.groupBy({
+      this.prisma.transactions.count({ where }),
+      this.prisma.transactions.groupBy({
         by: ['description'],
         where,
         _count: {
@@ -156,14 +156,14 @@ export class TransactionLogService {
           }
         }
       }),
-      this.prisma.transaction.findMany({
+      this.prisma.transactions.findMany({
         where,
         orderBy: { createdAt: 'desc' },
         take: 10,
         include: {
-          user: {
+          users: {
             select: {
-              id: true,
+              
               email: true,
               firstName: true,
               lastName: true

@@ -6,10 +6,10 @@ export class UsersService {
   constructor(private prisma: PrismaService) {}
 
   async findById(id: string) {
-    const user = await this.prisma.user.findUnique({
+    const user = await this.prisma.users.findUnique({
       where: { id },
       select: {
-        id: true,
+        
         email: true,
         firstName: true,
         lastName: true,
@@ -19,7 +19,7 @@ export class UsersService {
         isActive: true,
         isEmailVerified: true,
         createdAt: true,
-        updatedAt: true,
+        
         subscriptions: {
           select: {
             type: true,
@@ -40,10 +40,10 @@ export class UsersService {
   }
 
   async findByEmail(email: string) {
-    return this.prisma.user.findUnique({
+    return this.prisma.users.findUnique({
       where: { email },
       select: {
-        id: true,
+        
         email: true,
         firstName: true,
         lastName: true,
@@ -53,7 +53,7 @@ export class UsersService {
         isActive: true,
         isEmailVerified: true,
         createdAt: true,
-        updatedAt: true,
+        
       },
     });
   }
@@ -63,11 +63,11 @@ export class UsersService {
     lastName?: string;
     avatar?: string;
   }) {
-    return this.prisma.user.update({
+    return this.prisma.users.update({
       where: { id: userId },
       data: updateData,
       select: {
-        id: true,
+        
         email: true,
         firstName: true,
         lastName: true,
@@ -76,13 +76,13 @@ export class UsersService {
         credits: true,
         isActive: true,
         isEmailVerified: true,
-        updatedAt: true,
+        
       },
     });
   }
 
   async deductCredits(userId: string, amount: number) {
-    const user = await this.prisma.user.findUnique({
+    const user = await this.prisma.users.findUnique({
       where: { id: userId },
       select: { credits: true },
     });
@@ -95,7 +95,7 @@ export class UsersService {
       throw new Error('Insufficient credits');
     }
 
-    return this.prisma.user.update({
+    return this.prisma.users.update({
       where: { id: userId },
       data: { credits: { decrement: amount } },
       select: { credits: true },
@@ -103,7 +103,7 @@ export class UsersService {
   }
 
   async addCredits(userId: string, amount: number) {
-    return this.prisma.user.update({
+    return this.prisma.users.update({
       where: { id: userId },
       data: { credits: { increment: amount } },
       select: { credits: true },
@@ -112,17 +112,17 @@ export class UsersService {
 
   async getUserStats(userId: string) {
     const [user, photoCount, customizationCount] = await Promise.all([
-      this.prisma.user.findUnique({
+      this.prisma.users.findUnique({
         where: { id: userId },
         select: {
           credits: true,
           createdAt: true,
         },
       }),
-      this.prisma.photo.count({
+      this.prisma.photos.count({
         where: { userId },
       }),
-      this.prisma.avatarCustomization.count({
+      this.prisma.avatar_customizations.count({
         where: { userId },
       }),
     ]);
@@ -143,7 +143,7 @@ export class UsersService {
     console.log('🔧 saveAvatarSession called with userId:', userId);
     
     // Check if user exists
-    const user = await this.prisma.user.findUnique({
+    const user = await this.prisma.users.findUnique({
       where: { id: userId },
     });
 
@@ -152,7 +152,7 @@ export class UsersService {
     }
 
     // 🔥 FIX: Add proper user isolation - delete ALL old sessions for this user first
-    await this.prisma.avatarGeneration.deleteMany({
+    await this.prisma.avatar_generations.deleteMany({
       where: { 
         sessionId: { startsWith: `session-${userId}` }
       }
@@ -162,7 +162,7 @@ export class UsersService {
     const sessionId = `session-${userId}-${Date.now()}`;
 
     // Use the existing AvatarGeneration model to store session data
-    const avatarSession = await this.prisma.avatarGeneration.create({
+    const avatarSession = await this.prisma.avatar_generations.create({
       data: {
         sessionId: sessionId, // 🔥 FIX: Use unique timestamped session ID
         userImage: sessionData.uploadedImage || '',
@@ -192,7 +192,7 @@ export class UsersService {
 
   async getAvatarSession(userId: string) {
     // 🔥 FIX: Get the LATEST session for this specific user
-    const avatarSession = await this.prisma.avatarGeneration.findFirst({
+    const avatarSession = await this.prisma.avatar_generations.findFirst({
       where: { 
         sessionId: { startsWith: `session-${userId}` }
       },
@@ -232,7 +232,7 @@ export class UsersService {
 
   async clearAvatarSession(userId: string) {
     // 🔥 FIX: Clear ALL sessions for this specific user
-    await this.prisma.avatarGeneration.deleteMany({
+    await this.prisma.avatar_generations.deleteMany({
       where: { 
         sessionId: { startsWith: `session-${userId}` }
       }
