@@ -10,7 +10,7 @@ import { UsersModule } from './modules/users/users.module';
 import { WearablesModule } from './modules/wearables/wearables.module';
 import { PhotosModule } from './modules/photos/photos.module';
 import { PaymentsModule } from './modules/payments/payments.module';
-// import { MagicHourModule } from './modules/magic-hour/magic-hour.module'; // Temporarily disabled
+import { MagicHourModule } from './modules/magic-hour/magic-hour.module'; // Re-enabled for avatar generation
 import { CustomizationsModule } from './modules/customizations/customizations.module';
 import { AdminModule } from './modules/admin/admin.module';
 import { WebhookModule } from './modules/webhooks/webhook.module';
@@ -51,7 +51,7 @@ import { AuthLogoutInterceptor } from './guards/auth-logout.interceptor';
     WearablesModule,
     PhotosModule,
     PaymentsModule,
-    // MagicHourModule, // Temporarily disabled
+    MagicHourModule, // Re-enabled for avatar generation
     CustomizationsModule,
     AdminModule,
     WebhookModule,

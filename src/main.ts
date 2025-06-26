@@ -69,9 +69,15 @@ async function bootstrap() {
   // Enable trust proxy for production
   app.set('trust proxy', 1);
 
-  // Add placeholder route mapping
+  // Add placeholder route mapping for different path patterns
   app.use('/api/placeholder', (req, res, next) => {
     // Redirect placeholder requests to photos controller
+    req.url = `/api/v1/photos/placeholder${req.url}`;
+    next();
+  });
+
+  // Additional placeholder mapping for root level requests
+  app.use('/placeholder', (req, res, next) => {
     req.url = `/api/v1/photos/placeholder${req.url}`;
     next();
   });
