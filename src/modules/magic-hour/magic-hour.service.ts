@@ -32,9 +32,40 @@ export class MagicHourService {
       
       let generatedImageUrl = imageUrl; // Fallback to original
       
-      if (magicHourResponse && magicHourResponse.image_url) {
-        generatedImageUrl = magicHourResponse.image_url;
-        console.log('✅ Magic Hour generated new image:', generatedImageUrl);
+      if (magicHourResponse) {
+        console.log('✅ Magic Hour API response:', JSON.stringify(magicHourResponse, null, 2));
+        
+        // Extract the generated image URL from Magic Hour response
+        // Check multiple possible response formats
+        if (magicHourResponse.image_url) {
+          generatedImageUrl = magicHourResponse.image_url;
+        } else if (magicHourResponse.url) {
+          generatedImageUrl = magicHourResponse.url;
+        } else if (magicHourResponse.result && magicHourResponse.result.image_url) {
+          generatedImageUrl = magicHourResponse.result.image_url;
+        } else if (magicHourResponse.data && magicHourResponse.data.image_url) {
+          generatedImageUrl = magicHourResponse.data.image_url;
+        } else if (magicHourResponse.output) {
+          generatedImageUrl = magicHourResponse.output;
+        } else {
+          console.log('⚠️ Could not find image_url in Magic Hour response, checking all fields...');
+          console.log('Available fields:', Object.keys(magicHourResponse));
+          
+          // Try to find any URL-like field
+          for (const [key, value] of Object.entries(magicHourResponse)) {
+            if (typeof value === 'string' && (value.includes('http') || value.includes('magichour'))) {
+              console.log(`🔍 Found potential image URL in field '${key}':`, value);
+              generatedImageUrl = value;
+              break;
+            }
+          }
+        }
+        
+        if (generatedImageUrl !== imageUrl) {
+          console.log('✅ Magic Hour generated NEW image URL:', generatedImageUrl);
+        } else {
+          console.log('⚠️ Using original image as fallback');
+        }
       } else {
         console.log('⚠️ Magic Hour API failed, using enhanced prompt with original image');
         // Generate a unique variation using timestamp and random elements
@@ -65,6 +96,7 @@ export class MagicHourService {
       });
 
       console.log('✅ Avatar generation completed with NEW image:', avatarGeneration.id);
+      console.log('🎯 RETURNING GENERATED URL:', generatedImageUrl);
 
       return {
         id: avatarGeneration.id,
