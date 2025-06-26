@@ -2,7 +2,7 @@ import { Injectable, Logger, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../../database/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { EmailService } from '../email/email.service';
-import { PaymentsService } from '../payments/payments.service';
+import { PaymentsService } from '../payments/services';
 import * as bcrypt from 'bcryptjs';
 import {
   CreateAdminDto,

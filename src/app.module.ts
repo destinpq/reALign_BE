@@ -8,26 +8,38 @@ import { AuthModule } from './modules/auth/auth.module';
 import { UsersModule } from './modules/users/users.module';
 import { WearablesModule } from './modules/wearables/wearables.module';
 import { PhotosModule } from './modules/photos/photos.module';
-import { CustomizationsModule } from './modules/customizations/customizations.module';
-import { MagicHourModule } from './modules/magic-hour/magic-hour.module';
 import { PaymentsModule } from './modules/payments/payments.module';
+// import { MagicHourModule } from './modules/magic-hour/magic-hour.module'; // Temporarily disabled
+import { CustomizationsModule } from './modules/customizations/customizations.module';
+import { AdminModule } from './modules/admin/admin.module';
+import { WebhookModule } from './modules/webhooks/webhook.module';
 import { AuditModule } from './modules/audit/audit.module';
 import { EmailModule } from './modules/email/email.module';
-import { AdminModule } from './modules/admin/admin.module';
 import { TransactionModule } from './modules/transactions/transaction.module';
-import { WebhookModule } from './modules/webhooks/webhook.module';
 import { HealthModule } from './common/health/health.module';
 
 @Module({
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
+      envFilePath: '.env',
     }),
     ThrottlerModule.forRoot([
       {
-        ttl: 60000, // 1 minute
-        limit: 100, // 100 requests per minute
+        name: 'short',
+        ttl: 1000,
+        limit: 3,
       },
+      {
+        name: 'medium',
+        ttl: 10000,
+        limit: 20
+      },
+      {
+        name: 'long',
+        ttl: 60000,
+        limit: 100
+      }
     ]),
     ScheduleModule.forRoot(),
     EventEmitterModule.forRoot(),
@@ -36,14 +48,14 @@ import { HealthModule } from './common/health/health.module';
     UsersModule,
     WearablesModule,
     PhotosModule,
-    CustomizationsModule,
-    MagicHourModule,
     PaymentsModule,
+    // MagicHourModule, // Temporarily disabled
+    CustomizationsModule,
+    AdminModule,
+    WebhookModule,
     AuditModule,
     EmailModule,
-    AdminModule,
     TransactionModule,
-    WebhookModule,
     HealthModule,
   ],
 })

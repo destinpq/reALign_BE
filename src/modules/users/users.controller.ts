@@ -2,6 +2,7 @@ import {
   Controller,
   Get,
   Post,
+  Delete,
   Body,
   UseGuards,
   Request,
@@ -60,6 +61,19 @@ export class UsersController {
     return {
       success: true,
       ...result,
+    };
+  }
+
+  @Delete('avatar-session')
+  @ApiOperation({ summary: 'Clear avatar creation session from database' })
+  @ApiResponse({ status: 200, description: 'Avatar session cleared successfully' })
+  async clearAvatarSession(@Request() req) {
+    console.log('🗑️ clearAvatarSession called with userId:', req.user.id);
+    const result = await this.usersService.clearAvatarSession(req.user.id);
+    
+    return {
+      success: true,
+      message: 'Avatar session cleared from database successfully',
     };
   }
 

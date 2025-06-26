@@ -77,15 +77,18 @@ export class PaymentsService {
         throw new Error('Razorpay not initialized - payment gateway not available');
       }
 
-      // Create real Razorpay order
+      // Create real Razorpay order with auto-capture enabled
       const razorpayOrder = await this.razorpay.orders.create({
         amount: finalAmount,
         currency: createOrderDto.currency,
         receipt: `order_${userId}_${Date.now()}`,
+        payment_capture: true, // Auto-capture payments to prevent refunds
         notes: {
           userId,
           subscriptionType: createOrderDto.subscriptionType,
           credits: creditsToAward.toString(),
+          auto_capture: 'true',
+          service: 'AI Avatar Generation'
         },
       });
 

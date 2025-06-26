@@ -23,7 +23,7 @@ import {
   ApiQuery,
 } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
-import { PaymentsService } from './payments.service';
+import { PaymentsService } from './services';
 import {
   CreateOrderDto,
   VerifyPaymentDto,
@@ -33,6 +33,7 @@ import {
 } from './dto/payments.dto';
 import { WebhookService } from '../webhooks/webhook.service';
 import { PrismaService } from '../../database/prisma.service';
+import { PaymentStatus } from '@prisma/client';
 
 @ApiTags('Payments')
 @Controller('payments')
@@ -368,7 +369,7 @@ export class PaymentsController {
         razorpayPaymentId: paymentData.razorpay_payment_id,
         razorpayOrderId: paymentData.razorpay_order_id,
         razorpaySignature: paymentData.razorpay_signature,
-        amount: paymentData.amount,
+        amount: paymentData.amount * 100, // Convert to paise for consistency
         currency: 'INR',
         status: 'COMPLETED',
         description: 'AI Avatar Generation',
@@ -449,18 +450,22 @@ export class PaymentsController {
       const userId = req.user.id;
       console.log('🔍 Checking payment status for user:', userId);
       
-      // Check for recent valid payments (within last 24 hours)
-      const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+      // 🚨 STRICT PAYMENT CHECK: Only allow payments made in the last 10 minutes
+      // This ensures user must make a fresh payment for each avatar generation
+      const tenMinutesAgo = new Date(Date.now() - 10 * 60 * 1000);
       
              const recentPayment = await this.prismaService.payment.findFirst({
          where: {
            userId: userId,
-           status: 'COMPLETED',
+           status: PaymentStatus.COMPLETED,
            createdAt: {
-             gte: twentyFourHoursAgo
+            gte: tenMinutesAgo // Only last 10 minutes
            },
            amount: {
              gte: 19900 // ₹199 in paise
+          },
+          description: {
+            contains: 'AI Avatar Generation' // Must be specifically for avatar generation
            }
          },
          orderBy: {
@@ -470,7 +475,10 @@ export class PaymentsController {
       
       const hasValidPayment = !!recentPayment;
       
-      console.log(`💳 Payment check result for ${userId}:`, hasValidPayment ? 'VALID' : 'NO PAYMENT');
+      console.log(`💳 STRICT Payment check result for ${userId}:`, hasValidPayment ? 'VALID' : 'NO RECENT PAYMENT');
+      if (recentPayment) {
+        console.log(`💳 Found payment: ₹${Number(recentPayment.amount)/100} at ${recentPayment.createdAt}`);
+      }
       
       return {
         success: true,
@@ -478,7 +486,8 @@ export class PaymentsController {
         paymentData: recentPayment ? {
           id: recentPayment.id,
           amount: recentPayment.amount,
-          createdAt: recentPayment.createdAt
+          createdAt: recentPayment.createdAt,
+          description: recentPayment.description
         } : null
       };
       

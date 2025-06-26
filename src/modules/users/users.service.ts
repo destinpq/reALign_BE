@@ -140,6 +140,8 @@ export class UsersService {
   }
 
   async saveAvatarSession(userId: string, sessionData: any) {
+    console.log('🔧 saveAvatarSession called with userId:', userId);
+    
     // Check if user exists
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
@@ -149,35 +151,20 @@ export class UsersService {
       throw new NotFoundException('User not found');
     }
 
-    // Create a unique session ID for this user
-    const sessionId = `${userId}-${Date.now()}`;
+    // 🔥 FIX: Add proper user isolation - delete ALL old sessions for this user first
+    await this.prisma.avatarGeneration.deleteMany({
+      where: { 
+        sessionId: { startsWith: `session-${userId}` }
+      }
+    });
+
+    // Create a unique session ID for this user with timestamp
+    const sessionId = `session-${userId}-${Date.now()}`;
 
     // Use the existing AvatarGeneration model to store session data
-    const avatarSession = await this.prisma.avatarGeneration.upsert({
-      where: { sessionId: `session-${userId}` }, // Use a consistent session ID for updates
-      update: {
-        userImage: sessionData.uploadedImage || '',
-        selectedWearables: sessionData.selectedItems || {},
-        selectedScenery: sessionData.selectedScenery || '',
-        userDetails: {
-          gender: sessionData.gender,
-          name: sessionData.name,
-          age: sessionData.age,
-          ethnicity: sessionData.ethnicity,
-          hairColor: sessionData.hairColor,
-          eyeColor: sessionData.eyeColor,
-          userDetails: sessionData.userDetails,
-        },
-        generatedPrompt: sessionData.customPrompt || '',
-        metadata: {
-          colorOverrides: sessionData.colorOverrides || {},
-          style: sessionData.style || '',
-          lastSaved: new Date().toISOString(),
-        },
-        updatedAt: new Date(),
-      },
-      create: {
-        sessionId: `session-${userId}`,
+    const avatarSession = await this.prisma.avatarGeneration.create({
+      data: {
+        sessionId: sessionId, // 🔥 FIX: Use unique timestamped session ID
         userImage: sessionData.uploadedImage || '',
         selectedWearables: sessionData.selectedItems || {},
         selectedScenery: sessionData.selectedScenery || '',
@@ -204,8 +191,12 @@ export class UsersService {
   }
 
   async getAvatarSession(userId: string) {
-    const avatarSession = await this.prisma.avatarGeneration.findUnique({
-      where: { sessionId: `session-${userId}` },
+    // 🔥 FIX: Get the LATEST session for this specific user
+    const avatarSession = await this.prisma.avatarGeneration.findFirst({
+      where: { 
+        sessionId: { startsWith: `session-${userId}` }
+      },
+      orderBy: { createdAt: 'desc' }
     });
 
     if (!avatarSession) {
@@ -237,5 +228,17 @@ export class UsersService {
       sessionData,
       timestamp: avatarSession.updatedAt.toISOString(),
     };
+  }
+
+  async clearAvatarSession(userId: string) {
+    // 🔥 FIX: Clear ALL sessions for this specific user
+    await this.prisma.avatarGeneration.deleteMany({
+      where: { 
+        sessionId: { startsWith: `session-${userId}` }
+      }
+    });
+    
+    console.log(`🗑️ Cleared all avatar sessions for user: ${userId}`);
+    return { success: true };
   }
 } 
