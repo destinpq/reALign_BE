@@ -654,4 +654,79 @@ export class PaymentsController {
       console.error('❌ Failed to handle refund:', error);
     }
   }
+
+  @Post('create-direct-order')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Create direct Razorpay order (bypass checkout frontend)' })
+  @ApiResponse({ status: 201, description: 'Order created successfully' })
+  async createDirectOrder(
+    @Request() req,
+    @Body() createOrderDto: CreateOrderDto,
+  ) {
+    try {
+      console.log('🚀 Creating DIRECT Razorpay order for user:', req.user.id);
+      
+      // Create order using our working backend API
+      const orderResult = await this.paymentsService.createOrder(req.user.id, createOrderDto);
+      
+      console.log('✅ Direct order created successfully:', orderResult.razorpayOrderId);
+      
+      // Return order details for direct payment processing
+      return {
+        success: true,
+        order: {
+          id: orderResult.razorpayOrderId,
+          amount: orderResult.amount,
+          currency: orderResult.currency,
+          key: orderResult.key,
+        },
+        message: 'Order created successfully - proceed with payment',
+      };
+      
+    } catch (error) {
+      console.error('❌ Direct order creation failed:', error);
+      throw new BadRequestException(error.message || 'Failed to create payment order');
+    }
+  }
+
+  @Post('complete-direct-payment')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Complete direct payment and award credits' })
+  @ApiResponse({ status: 200, description: 'Payment completed successfully' })
+  async completeDirectPayment(
+    @Request() req,
+    @Body() body: {
+      razorpay_payment_id: string;
+      razorpay_order_id: string;
+      razorpay_signature: string;
+    },
+  ) {
+    try {
+      console.log('💳 Completing direct payment for user:', req.user.id);
+      console.log('Payment ID:', body.razorpay_payment_id);
+      console.log('Order ID:', body.razorpay_order_id);
+      
+      // Verify and complete payment
+      const result = await this.paymentsService.verifyPayment(req.user.id, {
+        razorpayPaymentId: body.razorpay_payment_id,
+        razorpayOrderId: body.razorpay_order_id,
+        razorpaySignature: body.razorpay_signature,
+      });
+      
+      console.log('✅ Direct payment completed successfully');
+      
+      return {
+        success: true,
+        payment: result.payment,
+        creditsAwarded: result.creditsAwarded,
+        message: 'Payment completed successfully - avatar generation unlocked!',
+      };
+      
+    } catch (error) {
+      console.error('❌ Direct payment completion failed:', error);
+      throw new BadRequestException(error.message || 'Failed to complete payment');
+    }
+  }
 } 
