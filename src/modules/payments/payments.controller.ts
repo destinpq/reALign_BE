@@ -13,6 +13,7 @@ import {
   HttpStatus,
   Param,
   BadRequestException,
+  UnauthorizedException,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -444,32 +445,72 @@ export class PaymentsController {
   }
 
   @Get('check-status')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
   @ApiOperation({ summary: 'Check if user has valid payment for avatar generation' })
   @ApiResponse({ status: 200, description: 'Payment status checked successfully' })
+  @ApiResponse({ status: 401, description: 'User not authenticated - must log out' })
   async checkPaymentStatus(@Req() req: any) {
     try {
-      // For now, return that no payment is required since users aren't authenticated
-      // This allows the frontend to work without forcing login
-      console.log('🔍 Public payment status check - no authentication required');
+      // Check if user is properly authenticated
+      if (!req.users || !req.users.id) {
+        console.error('❌ User not authenticated - req.users is undefined');
+        throw new UnauthorizedException('User not authenticated. Please log in again.');
+      }
+
+      const userId = req.users.id;
+      console.log('🔍 Checking payment status for user:', userId);
+      
+      // 🚨 STRICT PAYMENT CHECK: Only allow payments made in the last 10 minutes
+      // This ensures user must make a fresh payment for each avatar generation
+      const tenMinutesAgo = new Date(Date.now() - 10 * 60 * 1000);
+      
+      const recentPayment = await this.prismaService.payments.findFirst({
+        where: {
+          userId: userId,
+          status: PaymentStatus.COMPLETED,
+          createdAt: {
+            gte: tenMinutesAgo // Only last 10 minutes
+          },
+          amount: {
+            gte: 19900 // ₹199 in paise
+          },
+          description: {
+            contains: 'AI Avatar Generation' // Must be specifically for avatar generation
+          }
+        },
+        orderBy: {
+          createdAt: 'desc'
+        }
+      });
+      
+      const hasValidPayment = !!recentPayment;
+      
+      console.log(`💳 STRICT Payment check result for ${userId}:`, hasValidPayment ? 'VALID' : 'NO RECENT PAYMENT');
+      if (recentPayment) {
+        console.log(`💳 Found payment: ₹${Number(recentPayment.amount)/100} at ${recentPayment.createdAt}`);
+      }
       
       return {
         success: true,
-        hasValidPayment: true, // Allow generation without payment for now
-        paymentData: {
-          id: 'public-access',
-          amount: 0,
-          createdAt: new Date(),
-          description: 'Public access - no payment required'
-        }
+        hasValidPayment,
+        paymentData: recentPayment ? {
+          id: recentPayment.id,
+          amount: recentPayment.amount,
+          createdAt: recentPayment.createdAt,
+          description: recentPayment.description
+        } : null
       };
       
     } catch (error) {
       console.error('❌ Payment status check failed:', error);
-      return {
-        success: false,
-        hasValidPayment: false,
-        message: 'Payment check failed'
-      };
+      
+      // If it's an authentication error, throw 401 to force logout
+      if (error instanceof UnauthorizedException) {
+        throw error;
+      }
+      
+      throw new BadRequestException('Failed to check payment status');
     }
   }
 } 

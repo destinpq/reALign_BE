@@ -16,7 +16,8 @@ import {
   HttpException,
   HttpStatus,
   BadRequestException,
-  InternalServerErrorException
+  InternalServerErrorException,
+  UnauthorizedException
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import {
@@ -926,14 +927,17 @@ Use the exact format above. Replace the example values with what you see in the 
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Get Magic Hour generation history' })
   @ApiResponse({ status: 200, description: 'Magic Hour history retrieved successfully' })
+  @ApiResponse({ status: 401, description: 'User not authenticated - must log out' })
   async getMagicHourHistory(@Req() req: any) {
     try {
       // Check if user is authenticated
       if (!req.users || !req.users.id) {
-        throw new BadRequestException('User not authenticated. Please log in again.');
+        console.error('❌ User not authenticated - req.users is undefined');
+        throw new UnauthorizedException('User not authenticated. Please log in again.');
       }
 
       const userId = req.users.id;
+      console.log('🔍 Getting Magic Hour history for user:', userId);
       
       // Get avatar generations for this user
       const avatarGenerations = await this.prismaService.avatar_generations.findMany({
@@ -960,11 +964,13 @@ Use the exact format above. Replace the example values with what you see in the 
       };
     } catch (error) {
       console.error('❌ Failed to get Magic Hour history:', error);
-      return {
-        success: false,
-        message: 'Failed to retrieve Magic Hour history',
-        error: error.message
-      };
+      
+      // If it's an authentication error, throw 401 to force logout
+      if (error instanceof UnauthorizedException) {
+        throw error;
+      }
+      
+      throw new BadRequestException('Failed to retrieve Magic Hour history');
     }
   }
 } 
