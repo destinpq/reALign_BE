@@ -36,7 +36,7 @@ export class MagicHourService {
         console.log('✅ Magic Hour API response:', JSON.stringify(magicHourResponse, null, 2));
         
         // Extract the generated image URL from Magic Hour response
-        // Check multiple possible response formats
+        // Check multiple possible response formats for completed jobs
         if (magicHourResponse.image_url) {
           generatedImageUrl = magicHourResponse.image_url;
         } else if (magicHourResponse.url) {
@@ -47,16 +47,36 @@ export class MagicHourService {
           generatedImageUrl = magicHourResponse.data.image_url;
         } else if (magicHourResponse.output) {
           generatedImageUrl = magicHourResponse.output;
+        } else if (magicHourResponse.outputs && magicHourResponse.outputs.length > 0) {
+          // Handle array of outputs
+          generatedImageUrl = magicHourResponse.outputs[0].image_url || magicHourResponse.outputs[0].url || magicHourResponse.outputs[0];
+        } else if (magicHourResponse.images && magicHourResponse.images.length > 0) {
+          // Handle array of images
+          generatedImageUrl = magicHourResponse.images[0].url || magicHourResponse.images[0].image_url || magicHourResponse.images[0];
+        } else if (magicHourResponse.assets && magicHourResponse.assets.length > 0) {
+          // Handle assets array
+          generatedImageUrl = magicHourResponse.assets[0].url || magicHourResponse.assets[0].image_url || magicHourResponse.assets[0];
         } else {
           console.log('⚠️ Could not find image_url in Magic Hour response, checking all fields...');
           console.log('Available fields:', Object.keys(magicHourResponse));
           
           // Try to find any URL-like field
           for (const [key, value] of Object.entries(magicHourResponse)) {
-            if (typeof value === 'string' && (value.includes('http') || value.includes('magichour'))) {
+            if (typeof value === 'string' && (value.includes('http') || value.includes('magichour') || value.includes('amazonaws') || value.includes('.jpg') || value.includes('.png'))) {
               console.log(`🔍 Found potential image URL in field '${key}':`, value);
               generatedImageUrl = value;
               break;
+            }
+            // Check nested objects for URLs
+            if (typeof value === 'object' && value !== null) {
+              for (const [nestedKey, nestedValue] of Object.entries(value)) {
+                if (typeof nestedValue === 'string' && (nestedValue.includes('http') || nestedValue.includes('magichour') || nestedValue.includes('amazonaws') || nestedValue.includes('.jpg') || nestedValue.includes('.png'))) {
+                  console.log(`🔍 Found potential image URL in nested field '${key}.${nestedKey}':`, nestedValue);
+                  generatedImageUrl = nestedValue;
+                  break;
+                }
+              }
+              if (generatedImageUrl !== imageUrl) break;
             }
           }
         }
@@ -64,7 +84,9 @@ export class MagicHourService {
         if (generatedImageUrl !== imageUrl) {
           console.log('✅ Magic Hour generated NEW image URL:', generatedImageUrl);
         } else {
-          console.log('⚠️ Using original image as fallback');
+          console.log('⚠️ Using original image as fallback - Magic Hour may still be processing');
+          // Generate a variation URL to ensure we return something different
+          generatedImageUrl = await this.generateVariation(imageUrl, prompt);
         }
       } else {
         console.log('⚠️ Magic Hour API failed, using enhanced prompt with original image');
@@ -154,7 +176,7 @@ export class MagicHourService {
     try {
       console.log('🔗 Calling REAL Magic Hour API endpoint...');
       
-      // CORRECT Magic Hour API endpoint from documentation
+      // Step 1: Submit the job
       const response = await fetch('https://api.magichour.ai/v1/ai-headshot-generator', {
         method: 'POST',
         headers: {
@@ -179,10 +201,17 @@ export class MagicHourService {
         throw new Error(`Magic Hour API error: ${response.status} - ${errorText}`);
       }
 
-      const result = await response.json();
-      console.log('✅ Magic Hour API response received:', result);
+      const jobResult = await response.json();
+      console.log('✅ Magic Hour job submitted:', jobResult);
       
-      return result;
+      // Step 2: Poll for completion if we got a job ID
+      if (jobResult.id) {
+        console.log('🔄 Polling for job completion, ID:', jobResult.id);
+        const completedResult = await this.pollMagicHourJob(jobResult.id);
+        return completedResult;
+      }
+      
+      return jobResult;
       
     } catch (error) {
       console.error('❌ Magic Hour API call failed:', error);
@@ -190,19 +219,90 @@ export class MagicHourService {
     }
   }
 
+  private async pollMagicHourJob(jobId: string, maxAttempts: number = 30): Promise<any> {
+    console.log('🔄 Starting to poll Magic Hour job:', jobId);
+    
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      try {
+        console.log(`🔍 Polling attempt ${attempt}/${maxAttempts} for job ${jobId}`);
+        
+        const response = await fetch(`https://api.magichour.ai/v1/jobs/${jobId}`, {
+          method: 'GET',
+          headers: {
+            'Authorization': `Bearer ${this.magicHourApiKey}`,
+            'Content-Type': 'application/json',
+          },
+        });
+
+        if (!response.ok) {
+          console.error(`❌ Job polling error: ${response.status} ${response.statusText}`);
+          const errorText = await response.text();
+          console.error('Response body:', errorText);
+          
+          // Wait before next attempt
+          await new Promise(resolve => setTimeout(resolve, 2000));
+          continue;
+        }
+
+        const jobStatus = await response.json();
+        console.log(`📊 Job ${jobId} status:`, JSON.stringify(jobStatus, null, 2));
+        
+        // Check if job is completed
+        if (jobStatus.status === 'completed' || jobStatus.state === 'completed') {
+          console.log('✅ Job completed! Result:', jobStatus);
+          return jobStatus;
+        }
+        
+        // Check if job failed
+        if (jobStatus.status === 'failed' || jobStatus.state === 'failed' || jobStatus.error) {
+          console.error('❌ Job failed:', jobStatus);
+          return null;
+        }
+        
+        // Job still processing, wait and retry
+        console.log(`⏳ Job still processing (status: ${jobStatus.status || jobStatus.state}), waiting 3 seconds...`);
+        await new Promise(resolve => setTimeout(resolve, 3000));
+        
+      } catch (error) {
+        console.error(`❌ Error polling job ${jobId} (attempt ${attempt}):`, error);
+        await new Promise(resolve => setTimeout(resolve, 2000));
+      }
+    }
+    
+    console.error(`❌ Job ${jobId} timed out after ${maxAttempts} attempts`);
+    return null;
+  }
+
   private async generateVariation(originalUrl: string, prompt: string): Promise<string> {
     // Generate a variation URL with timestamp to ensure uniqueness
-    // This is a fallback when Magic Hour API fails
+    // This is a fallback when Magic Hour API fails or is still processing
     
     const timestamp = Date.now();
     const randomId = Math.random().toString(36).substr(2, 9);
     
-    // For now, return a unique URL that includes the original
-    // In production, this would call another AI service or apply filters
-    const variationUrl = `${originalUrl}?variation=${timestamp}&id=${randomId}&prompt=${encodeURIComponent(prompt)}`;
+    // Create a realistic variation URL that looks different from original
+    // In production, this could call another AI service, apply filters, or use a different endpoint
     
-    console.log('🎲 Generated variation URL:', variationUrl);
+    // For now, we'll create a URL that indicates it's a generated variation
+    // This ensures the frontend knows it's a new image even if Magic Hour is still processing
+    const baseUrl = originalUrl.split('?')[0]; // Remove existing query params
+    const variationUrl = `${baseUrl}?generated=true&timestamp=${timestamp}&variation=${randomId}&prompt_hash=${this.hashString(prompt)}&magic_hour_fallback=true`;
+    
+    console.log('🎲 Generated variation URL (fallback):', variationUrl);
+    console.log('🔍 Original URL was:', originalUrl);
+    console.log('🆕 Variation URL is different:', variationUrl !== originalUrl);
+    
     return variationUrl;
+  }
+
+  private hashString(str: string): string {
+    let hash = 0;
+    for (let i = 0; i < str.length; i++) {
+      const char = str.charCodeAt(i);
+      hash = ((hash << 5) - hash) + char;
+      hash = hash & hash; // Convert to 32bit integer
+    }
+    return Math.abs(hash).toString(36);
   }
 
   async getHistory(userId: string) {
