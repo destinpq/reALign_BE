@@ -44,6 +44,10 @@ export class MagicHourService {
         } else if (magicHourResponse.downloads && magicHourResponse.downloads.length > 0) {
           // Magic Hour returns downloads array with URLs
           generatedImageUrl = magicHourResponse.downloads[0].url || magicHourResponse.downloads[0];
+        } else if (magicHourResponse.id && typeof magicHourResponse.id === 'string') {
+          // Magic Hour dashboard URL format: https://magichour.ai/dashboard/images/{id}
+          generatedImageUrl = `https://magichour.ai/dashboard/images/${magicHourResponse.id}`;
+          console.log('🎯 Generated Magic Hour dashboard URL:', generatedImageUrl);
         } else if (magicHourResponse.result && magicHourResponse.result.image_url) {
           generatedImageUrl = magicHourResponse.result.image_url;
         } else if (magicHourResponse.data && magicHourResponse.data.image_url) {
@@ -81,6 +85,12 @@ export class MagicHourService {
               }
               if (generatedImageUrl !== imageUrl) break;
             }
+          }
+          
+          // If still no URL found, try to construct from job ID
+          if (generatedImageUrl === imageUrl && magicHourResponse.id) {
+            generatedImageUrl = `https://magichour.ai/dashboard/images/${magicHourResponse.id}`;
+            console.log('🔧 Constructed Magic Hour dashboard URL from job ID:', generatedImageUrl);
           }
         }
         
