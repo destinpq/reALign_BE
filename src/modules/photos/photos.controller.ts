@@ -38,6 +38,7 @@ import { extname } from 'path';
 import { v4 as uuidv4 } from 'uuid';
 import { promises as fs } from 'fs';
 import fetch from 'node-fetch';
+import { PrismaService } from '../../database/prisma.service';
 
 // Multer configuration for file uploads
 const multerConfig: MulterOptions = {
@@ -62,7 +63,10 @@ const multerConfig: MulterOptions = {
 @ApiTags('Photos')
 @Controller('photos')
 export class PhotosController {
-  constructor(private readonly photosService: PhotosService) {}
+  constructor(
+    private readonly photosService: PhotosService,
+    private readonly prismaService: PrismaService
+  ) {}
 
   @Post()
   @UseGuards(JwtAuthGuard)
@@ -769,6 +773,19 @@ Use the exact format above. Replace the example values with what you see in the 
     }
   }
 
+  // Add a simple placeholder route for the root API call
+  @Get('api/placeholder/:width/:height')
+  async getApiPlaceholderImage(
+    @Param("width") width: string,
+    @Param('height') height: string,
+    @Res() res: Response,
+    @Query('text') text?: string,
+    @Query('bg') backgroundColor?: string,
+    @Query('color') textColor?: string,
+  ) {
+    return this.getPlaceholderImage(width, height, res, text, backgroundColor, textColor);
+  }
+
   @Get('placeholder/wearable/:id')
   async getWearablePlaceholder(
     @Param('id') id: string,
@@ -899,6 +916,53 @@ Use the exact format above. Replace the example values with what you see in the 
       console.error('❌ Error clearing AI analysis:', error);
       return {
         success: false,
+        error: error.message
+      };
+    }
+  }
+
+  @Get('magic-hour/history')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get Magic Hour generation history' })
+  @ApiResponse({ status: 200, description: 'Magic Hour history retrieved successfully' })
+  async getMagicHourHistory(@Req() req: any) {
+    try {
+      // Check if user is authenticated
+      if (!req.users || !req.users.id) {
+        throw new BadRequestException('User not authenticated. Please log in again.');
+      }
+
+      const userId = req.users.id;
+      
+      // Get avatar generations for this user
+      const avatarGenerations = await this.prismaService.avatar_generations.findMany({
+        where: {
+          // For now, get all avatar generations since we don't have userId field
+          // In future, add userId field to avatar_generations table
+        },
+        orderBy: { createdAt: 'desc' },
+        take: 50,
+        select: {
+          id: true,
+          sessionId: true,
+          status: true,
+          generatedImageUrl: true,
+          createdAt: true,
+          metadata: true,
+        }
+      });
+
+      return {
+        success: true,
+        data: avatarGenerations,
+        total: avatarGenerations.length
+      };
+    } catch (error) {
+      console.error('❌ Failed to get Magic Hour history:', error);
+      return {
+        success: false,
+        message: 'Failed to retrieve Magic Hour history',
         error: error.message
       };
     }
