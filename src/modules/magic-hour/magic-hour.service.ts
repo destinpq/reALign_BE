@@ -234,8 +234,8 @@ export class MagicHourService {
       try {
         console.log(`🔍 Polling attempt ${attempt}/${maxAttempts} for job ${jobId}`);
         
-        // CORRECT endpoint from Magic Hour docs: GET /v1/image_projects/{id} (Get image details)
-        const response = await fetch(`https://api.magichour.ai/v1/image_projects/${jobId}`, {
+        // CORRECT endpoint for AI headshot jobs: /v1/ai-headshots/{id}
+        const response = await fetch(`https://api.magichour.ai/v1/ai-headshots/${jobId}`, {
           method: 'GET',
           headers: {
             'Authorization': `Bearer ${this.magicHourApiKey}`,
