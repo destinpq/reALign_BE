@@ -41,6 +41,9 @@ export class MagicHourService {
           generatedImageUrl = magicHourResponse.image_url;
         } else if (magicHourResponse.url) {
           generatedImageUrl = magicHourResponse.url;
+        } else if (magicHourResponse.downloads && magicHourResponse.downloads.length > 0) {
+          // Magic Hour returns downloads array with URLs
+          generatedImageUrl = magicHourResponse.downloads[0].url || magicHourResponse.downloads[0];
         } else if (magicHourResponse.result && magicHourResponse.result.image_url) {
           generatedImageUrl = magicHourResponse.result.image_url;
         } else if (magicHourResponse.data && magicHourResponse.data.image_url) {
@@ -203,12 +206,17 @@ export class MagicHourService {
 
       const jobResult = await response.json();
       console.log('✅ Magic Hour job submitted:', jobResult);
+      console.log('🔑 Extracted job ID:', jobResult.id);
+      console.log('💰 Credits charged:', jobResult.credits_charged);
       
       // Step 2: Poll for completion if we got a job ID
       if (jobResult.id) {
         console.log('🔄 Polling for job completion, ID:', jobResult.id);
         const completedResult = await this.pollMagicHourJob(jobResult.id);
         return completedResult;
+      } else {
+        console.error('❌ No job ID returned from Magic Hour API!');
+        console.error('Full response:', JSON.stringify(jobResult, null, 2));
       }
       
       return jobResult;
@@ -226,7 +234,8 @@ export class MagicHourService {
       try {
         console.log(`🔍 Polling attempt ${attempt}/${maxAttempts} for job ${jobId}`);
         
-        const response = await fetch(`https://api.magichour.ai/v1/jobs/${jobId}`, {
+        // CORRECT endpoint from Magic Hour docs: GET /v1/image_projects/{id} (Get image details)
+        const response = await fetch(`https://api.magichour.ai/v1/image_projects/${jobId}`, {
           method: 'GET',
           headers: {
             'Authorization': `Bearer ${this.magicHourApiKey}`,
@@ -239,37 +248,43 @@ export class MagicHourService {
           const errorText = await response.text();
           console.error('Response body:', errorText);
           
+          // If 404, the job might not exist or be ready yet
+          if (response.status === 404) {
+            console.log('⏳ Job not found yet, might still be initializing...');
+          }
+          
           // Wait before next attempt
-          await new Promise(resolve => setTimeout(resolve, 2000));
+          await new Promise(resolve => setTimeout(resolve, 3000));
           continue;
         }
 
         const jobStatus = await response.json();
         console.log(`📊 Job ${jobId} status:`, JSON.stringify(jobStatus, null, 2));
         
-        // Check if job is completed
-        if (jobStatus.status === 'completed' || jobStatus.state === 'completed') {
+        // Check if job is completed (Magic Hour uses "complete" status)
+        if (jobStatus.status === 'complete') {
           console.log('✅ Job completed! Result:', jobStatus);
           return jobStatus;
         }
         
         // Check if job failed
-        if (jobStatus.status === 'failed' || jobStatus.state === 'failed' || jobStatus.error) {
+        if (jobStatus.status === 'error' || jobStatus.status === 'failed') {
           console.error('❌ Job failed:', jobStatus);
           return null;
         }
         
         // Job still processing, wait and retry
-        console.log(`⏳ Job still processing (status: ${jobStatus.status || jobStatus.state}), waiting 3 seconds...`);
-        await new Promise(resolve => setTimeout(resolve, 3000));
+        const currentStatus = jobStatus.status || 'unknown';
+        console.log(`⏳ Job still processing (status: ${currentStatus}), waiting 4 seconds...`);
+        await new Promise(resolve => setTimeout(resolve, 4000));
         
       } catch (error) {
         console.error(`❌ Error polling job ${jobId} (attempt ${attempt}):`, error);
-        await new Promise(resolve => setTimeout(resolve, 2000));
+        await new Promise(resolve => setTimeout(resolve, 3000));
       }
     }
     
-    console.error(`❌ Job ${jobId} timed out after ${maxAttempts} attempts`);
+    console.error(`❌ Job ${jobId} timed out after ${maxAttempts} attempts (${maxAttempts * 4} seconds)`);
     return null;
   }
 
