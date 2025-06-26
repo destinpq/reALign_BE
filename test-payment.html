@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Razorpay Payment</title>
+    <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
+</head>
+<body>
+    <h1>🧪 Test Razorpay Payment</h1>
+    <p>This will test if payments work without auto-refunds</p>
+    
+    <button id="payButton" onclick="startPayment()">Pay ₹199 for Avatar Generation</button>
+    
+    <div id="result" style="margin-top: 20px;"></div>
+
+    <script>
+        function startPayment() {
+            const options = {
+                key: "rzp_live_ucdum2OBq7AJin", // Your live key
+                amount: 19900, // ₹199 in paise
+                currency: "INR",
+                name: "ReAlign Avatar",
+                description: "AI Avatar Generation Test",
+                order_id: "order_QlwOFxPWcrbFke", // Test order we created
+                handler: function(response) {
+                    document.getElementById('result').innerHTML = `
+                        <div style="color: green;">
+                            <h3>✅ Payment Successful!</h3>
+                            <p><strong>Payment ID:</strong> ${response.razorpay_payment_id}</p>
+                            <p><strong>Order ID:</strong> ${response.razorpay_order_id}</p>
+                            <p><strong>Signature:</strong> ${response.razorpay_signature}</p>
+                        </div>
+                    `;
+                    
+                    // Check if payment gets refunded
+                    setTimeout(() => {
+                        alert('Now check Razorpay dashboard to see if this payment gets auto-refunded!');
+                    }, 2000);
+                },
+                prefill: {
+                    name: "Test User",
+                    email: "test@example.com",
+                    contact: "9999999999"
+                },
+                theme: {
+                    color: "#3399cc"
+                },
+                modal: {
+                    ondismiss: function() {
+                        document.getElementById('result').innerHTML = `
+                            <div style="color: orange;">
+                                <p>❌ Payment cancelled by user</p>
+                            </div>
+                        `;
+                    }
+                }
+            };
+
+            const rzp = new Razorpay(options);
+            rzp.on('payment.failed', function(response) {
+                document.getElementById('result').innerHTML = `
+                    <div style="color: red;">
+                        <h3>❌ Payment Failed!</h3>
+                        <p><strong>Error:</strong> ${response.error.description}</p>
+                        <p><strong>Reason:</strong> ${response.error.reason}</p>
+                    </div>
+                `;
+            });
+            
+            rzp.open();
+        }
+    </script>
+    
+    <hr>
+    <h2>📋 Instructions:</h2>
+    <ol>
+        <li>Click the "Pay" button above</li>
+        <li>Complete the payment using test card or real payment method</li>
+        <li>Check if payment succeeds</li>
+        <li><strong>IMPORTANT:</strong> Check Razorpay dashboard in 1-2 minutes to see if payment gets auto-refunded</li>
+    </ol>
+    
+    <h3>🔗 Quick Links:</h3>
+    <ul>
+        <li><a href="https://dashboard.razorpay.com/app/payments" target="_blank">Razorpay Payments Dashboard</a></li>
+        <li><a href="https://dashboard.razorpay.com/app/webhooks" target="_blank">Razorpay Webhooks</a></li>
+    </ul>
+</body>
+</html> 
