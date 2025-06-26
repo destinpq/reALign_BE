@@ -169,7 +169,7 @@ export class PhotosService {
     return photo;
   }
 
-  async getSignedUrl(userId: string,  expiresIn = 3600) {
+  async getSignedUrl(userId: string, id: string, expiresIn = 3600) {
     const photo = await this.findOne(userId, id);
 
     const command = new GetObjectCommand({
@@ -180,7 +180,7 @@ export class PhotosService {
     return getSignedUrl(this.s3Client, command, { expiresIn });
   }
 
-  async update(userId: string,  updatePhotoDto: UpdatePhotoDto) {
+  async update(userId: string, id: string, updatePhotoDto: UpdatePhotoDto) {
     await this.findOne(userId, id); // Check if exists
 
     return this.prismaService.photos.update({

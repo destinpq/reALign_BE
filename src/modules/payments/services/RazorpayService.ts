@@ -18,8 +18,8 @@ export class RazorpayService {
     }
 
     this.razorpay = new Razorpay({
-      key_id
-      key_idsecret: keySecret
+      key_id: keyId,
+      key_secret: keySecret
     });
   }
 
@@ -166,8 +166,8 @@ export class RazorpayService {
   async createSubscription(planId: string, customerId: string, options?: any) {
     try {
       const subscriptionData = {
-        plan_id
-        customer_id
+        plan_id: planId,
+        customer_id: customerId,
         total_count: options?.totalCount || 12,
         quantity: options?.quantity || 1,
         start_at: options?.startAt,

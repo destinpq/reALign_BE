@@ -37,8 +37,8 @@ export class PaymentOrderService {
 
     try {
       this.razorpay = new Razorpay({
-        key_id
-        key_idsecret: keySecret,
+        key_id: keyId,
+        key_secret: keySecret,
       });
       this.logger.log('✅ Razorpay initialized successfully in PaymentOrderService');
     } catch (error) {

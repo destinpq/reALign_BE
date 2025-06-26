@@ -23,8 +23,8 @@ export class PaymentVerificationService {
     const keySecret = this.configService.get<string>('RAZORPAY_KEY_SECRET');
 
     this.razorpay = new Razorpay({
-      key_id
-      key_idsecret: keySecret,
+      key_id: keyId,
+      key_secret: keySecret,
     });
   }
 

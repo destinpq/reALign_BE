@@ -277,7 +277,7 @@ export class ContentModerationService {
       violations: violations.map(violation => ({
         
         userId: violation.userId,
-        user: violation.user,
+        users: violation.users,
         violationType: violation.metadata?.['violationType'],
         content: violation.metadata?.['content'],
         flaggedKeywords: violation.metadata?.['flaggedKeywords'],

@@ -250,7 +250,7 @@ export class PhotosController {
   @ApiResponse({ status: 404, description: 'Photo not found' })
   async update(
     @Request() req,
-    @Param('id') 
+    @Param('id') id: string,
     @Body() updatePhotoDto: UpdatePhotoDto,
   ) {
     return this.photosService.update(req.users.userId, id, updatePhotoDto);

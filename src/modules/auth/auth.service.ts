@@ -100,7 +100,7 @@ export class AuthService {
 
     return {
       ...tokens,
-      user: userWithoutPassword,
+      users: userWithoutPassword,
     };
   }
 

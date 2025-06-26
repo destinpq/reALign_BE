@@ -57,7 +57,7 @@ export class CustomizationsController {
   @ApiResponse({ status: 404, description: 'Customization not found' })
   async update(
     @Request() req,
-    @Param('id') 
+    @Param('id') id: string,
     @Body() updateCustomizationDto: UpdateCustomizationDto,
   ) {
     return this.customizationsService.update(req.users.userId, id, updateCustomizationDto);

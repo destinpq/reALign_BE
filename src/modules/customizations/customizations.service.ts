@@ -34,7 +34,7 @@ export class CustomizationsService {
     return customization;
   }
 
-  async update(userId: string,  updateCustomizationDto: UpdateCustomizationDto) {
+  async update(userId: string, id: string, updateCustomizationDto: UpdateCustomizationDto) {
     await this.findOne(userId, id); // Check if exists
 
     return this.prismaService.avatar_customizations.update({
