@@ -35,63 +35,17 @@ export class MagicHourService {
       if (magicHourResponse) {
         console.log('✅ Magic Hour API response:', JSON.stringify(magicHourResponse, null, 2));
         
-        // Extract the generated image URL from Magic Hour response
-        // Check multiple possible response formats for completed jobs
-        if (magicHourResponse.image_url) {
+        // 🎯 We now immediately return the dashboard URL, so just use it directly
+        if (magicHourResponse.dashboard_url) {
+          generatedImageUrl = magicHourResponse.dashboard_url;
+          console.log('🎉 Using Magic Hour dashboard URL:', generatedImageUrl);
+        } else if (magicHourResponse.image_url) {
           generatedImageUrl = magicHourResponse.image_url;
-        } else if (magicHourResponse.url) {
-          generatedImageUrl = magicHourResponse.url;
-        } else if (magicHourResponse.downloads && magicHourResponse.downloads.length > 0) {
-          // Magic Hour returns downloads array with URLs
-          generatedImageUrl = magicHourResponse.downloads[0].url || magicHourResponse.downloads[0];
-        } else if (magicHourResponse.id && typeof magicHourResponse.id === 'string') {
-          // Magic Hour dashboard URL format: https://magichour.ai/dashboard/images/{id}
-          generatedImageUrl = `https://magichour.ai/dashboard/images/${magicHourResponse.id}`;
-          console.log('🎯 Generated Magic Hour dashboard URL:', generatedImageUrl);
-        } else if (magicHourResponse.result && magicHourResponse.result.image_url) {
-          generatedImageUrl = magicHourResponse.result.image_url;
-        } else if (magicHourResponse.data && magicHourResponse.data.image_url) {
-          generatedImageUrl = magicHourResponse.data.image_url;
-        } else if (magicHourResponse.output) {
-          generatedImageUrl = magicHourResponse.output;
-        } else if (magicHourResponse.outputs && magicHourResponse.outputs.length > 0) {
-          // Handle array of outputs
-          generatedImageUrl = magicHourResponse.outputs[0].image_url || magicHourResponse.outputs[0].url || magicHourResponse.outputs[0];
-        } else if (magicHourResponse.images && magicHourResponse.images.length > 0) {
-          // Handle array of images
-          generatedImageUrl = magicHourResponse.images[0].url || magicHourResponse.images[0].image_url || magicHourResponse.images[0];
-        } else if (magicHourResponse.assets && magicHourResponse.assets.length > 0) {
-          // Handle assets array
-          generatedImageUrl = magicHourResponse.assets[0].url || magicHourResponse.assets[0].image_url || magicHourResponse.assets[0];
+        } else if (magicHourResponse.generatedImageUrl) {
+          generatedImageUrl = magicHourResponse.generatedImageUrl;
         } else {
-          console.log('⚠️ Could not find image_url in Magic Hour response, checking all fields...');
-          console.log('Available fields:', Object.keys(magicHourResponse));
-          
-          // Try to find any URL-like field
-          for (const [key, value] of Object.entries(magicHourResponse)) {
-            if (typeof value === 'string' && (value.includes('http') || value.includes('magichour') || value.includes('amazonaws') || value.includes('.jpg') || value.includes('.png'))) {
-              console.log(`🔍 Found potential image URL in field '${key}':`, value);
-              generatedImageUrl = value;
-              break;
-            }
-            // Check nested objects for URLs
-            if (typeof value === 'object' && value !== null) {
-              for (const [nestedKey, nestedValue] of Object.entries(value)) {
-                if (typeof nestedValue === 'string' && (nestedValue.includes('http') || nestedValue.includes('magichour') || nestedValue.includes('amazonaws') || nestedValue.includes('.jpg') || nestedValue.includes('.png'))) {
-                  console.log(`🔍 Found potential image URL in nested field '${key}.${nestedKey}':`, nestedValue);
-                  generatedImageUrl = nestedValue;
-                  break;
-                }
-              }
-              if (generatedImageUrl !== imageUrl) break;
-            }
-          }
-          
-          // If still no URL found, try to construct from job ID
-          if (generatedImageUrl === imageUrl && magicHourResponse.id) {
-            generatedImageUrl = `https://magichour.ai/dashboard/images/${magicHourResponse.id}`;
-            console.log('🔧 Constructed Magic Hour dashboard URL from job ID:', generatedImageUrl);
-          }
+          console.log('⚠️ No dashboard URL found in Magic Hour response');
+          generatedImageUrl = await this.generateVariation(imageUrl, prompt);
         }
         
         if (generatedImageUrl !== imageUrl) {
@@ -219,83 +173,35 @@ export class MagicHourService {
       console.log('🔑 Extracted job ID:', jobResult.id);
       console.log('💰 Credits charged:', jobResult.credits_charged);
       
-      // Step 2: Poll for completion if we got a job ID
+      // 🔥 FUCK POLLING! Just return the dashboard URL immediately!
       if (jobResult.id) {
-        console.log('🔄 Polling for job completion, ID:', jobResult.id);
-        const completedResult = await this.pollMagicHourJob(jobResult.id);
-        return completedResult;
+        const dashboardUrl = `https://magichour.ai/dashboard/images/${jobResult.id}`;
+        console.log('🎯 IMMEDIATELY returning Magic Hour dashboard URL:', dashboardUrl);
+        
+        // Return the dashboard URL directly - no polling needed!
+        return {
+          id: jobResult.id,
+          image_url: dashboardUrl,
+          s3_url: dashboardUrl,
+          generated_image_url: dashboardUrl,
+          imageUrl: dashboardUrl,
+          generatedImageUrl: dashboardUrl,
+          status: 'COMPLETED',
+          frame_cost: jobResult.frame_cost,
+          credits_charged: jobResult.credits_charged,
+          dashboard_url: dashboardUrl,
+          isNewGeneration: true,
+        };
       } else {
         console.error('❌ No job ID returned from Magic Hour API!');
         console.error('Full response:', JSON.stringify(jobResult, null, 2));
+        return null;
       }
-      
-      return jobResult;
       
     } catch (error) {
       console.error('❌ Magic Hour API call failed:', error);
       return null;
     }
-  }
-
-  private async pollMagicHourJob(jobId: string, maxAttempts: number = 30): Promise<any> {
-    console.log('🔄 Starting to poll Magic Hour job:', jobId);
-    
-    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-      try {
-        console.log(`🔍 Polling attempt ${attempt}/${maxAttempts} for job ${jobId}`);
-        
-        // CORRECT endpoint for AI headshot jobs: /v1/ai-headshots/{id}
-        const response = await fetch(`https://api.magichour.ai/v1/ai-headshots/${jobId}`, {
-          method: 'GET',
-          headers: {
-            'Authorization': `Bearer ${this.magicHourApiKey}`,
-            'Content-Type': 'application/json',
-          },
-        });
-
-        if (!response.ok) {
-          console.error(`❌ Job polling error: ${response.status} ${response.statusText}`);
-          const errorText = await response.text();
-          console.error('Response body:', errorText);
-          
-          // If 404, the job might not exist or be ready yet
-          if (response.status === 404) {
-            console.log('⏳ Job not found yet, might still be initializing...');
-          }
-          
-          // Wait before next attempt
-          await new Promise(resolve => setTimeout(resolve, 3000));
-          continue;
-        }
-
-        const jobStatus = await response.json();
-        console.log(`📊 Job ${jobId} status:`, JSON.stringify(jobStatus, null, 2));
-        
-        // Check if job is completed (Magic Hour uses "complete" status)
-        if (jobStatus.status === 'complete') {
-          console.log('✅ Job completed! Result:', jobStatus);
-          return jobStatus;
-        }
-        
-        // Check if job failed
-        if (jobStatus.status === 'error' || jobStatus.status === 'failed') {
-          console.error('❌ Job failed:', jobStatus);
-          return null;
-        }
-        
-        // Job still processing, wait and retry
-        const currentStatus = jobStatus.status || 'unknown';
-        console.log(`⏳ Job still processing (status: ${currentStatus}), waiting 4 seconds...`);
-        await new Promise(resolve => setTimeout(resolve, 4000));
-        
-      } catch (error) {
-        console.error(`❌ Error polling job ${jobId} (attempt ${attempt}):`, error);
-        await new Promise(resolve => setTimeout(resolve, 3000));
-      }
-    }
-    
-    console.error(`❌ Job ${jobId} timed out after ${maxAttempts} attempts (${maxAttempts * 4} seconds)`);
-    return null;
   }
 
   private async generateVariation(originalUrl: string, prompt: string): Promise<string> {
