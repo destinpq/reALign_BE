@@ -206,19 +206,12 @@ export class TransactionService {
       where: { transactionId },
       include: {
         users: {
-          select: {
-            
-            email: true,
-            firstName: true,
-            lastName: true,
-          }
+          select: { id: true, email: true, firstName: true, lastName: true }
         },
         transaction_events: {
           orderBy: { createdAt: 'desc' },
           take: 50
-        },
-        parentTransaction: true,
-        childTransactions: true,
+        }
       }
     });
 
@@ -265,12 +258,7 @@ export class TransactionService {
         orderBy: { createdAt: 'desc' },
         include: {
           users: {
-            select: {
-              
-              email: true,
-              firstName: true,
-              lastName: true,
-            }
+            select: { id: true, email: true, firstName: true, lastName: true }
           }
         }
       }),
@@ -587,13 +575,13 @@ export class TransactionService {
       update: {
         totalTransactions: { increment: 1 },
         totalAmount: { increment: transaction.amount },
-        // Add more specific updates based on transaction type and status
+        updatedAt: new Date(),
       },
       create: {
         date,
         totalTransactions: 1,
         totalAmount: transaction.amount,
-        // Initialize other fields
+        updatedAt: new Date(),
       }
     });
   }

@@ -248,6 +248,7 @@ export class EmailService {
           template: emailData.template,
           templateData: emailData.context,
           status: EmailStatus.PENDING,
+          updatedAt: new Date(),
         },
       });
 

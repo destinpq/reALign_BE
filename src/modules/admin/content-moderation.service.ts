@@ -178,7 +178,7 @@ export class ContentModerationService {
       // Get user details for potential action
       const user = await this.prismaService.users.findUnique({
         where: { id: userId },
-        select: { email: true, firstName: true, lastName: true },
+        select: { id: true, email: true, firstName: true, lastName: true },
       });
 
       if (user) {
@@ -220,7 +220,7 @@ export class ContentModerationService {
           role: { in: ['ADMIN', 'SUPER_ADMIN'] },
           isActive: true,
         },
-        select: { email: true },
+        select: { id: true, email: true },
       });
 
       // Send notification to all admins
@@ -256,13 +256,7 @@ export class ContentModerationService {
         take: limit,
         include: {
           users: {
-            select: {
-              
-              email: true,
-              firstName: true,
-              lastName: true,
-              isActive: true,
-            },
+            select: { id: true, email: true, firstName: true, lastName: true },
           },
         },
       }),

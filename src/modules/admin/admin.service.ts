@@ -184,7 +184,7 @@ export class AdminService {
           skip,
           take: limit,
           select: {
-            
+            id: true,
             email: true,
             firstName: true,
             lastName: true,
@@ -352,7 +352,7 @@ export class AdminService {
     try {
       const user = await this.prismaService.users.findUnique({
         where: { id: awardCreditsDto.userId },
-        select: { credits: true, email: true, firstName: true, lastName: true },
+        select: { id: true, credits: true, email: true, firstName: true, lastName: true },
       });
 
       if (!user) {

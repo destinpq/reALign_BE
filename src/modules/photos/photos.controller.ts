@@ -268,7 +268,7 @@ export class PhotosController {
 
   // Public endpoint - Show uploaded image as actual image (no auth required for public uploads)
   @Get(':id/view')
-  async viewImage(@Param('id')  @Res() res: Response) {
+  async viewImage(@Param('id') id: string, @Res() res: Response) {
     try {
       // First try to find as public upload
       const photo = await this.photosService.findOnePublic(id);
@@ -293,7 +293,7 @@ export class PhotosController {
   @Get(':id/direct')
   @ApiOperation({ summary: 'Get direct image data for Magic Hour API' })
   @ApiResponse({ status: 200, description: 'Raw image data returned' })
-  async directImage(@Param('id')  @Res() res: Response) {
+  async directImage(@Param('id') id: string, @Res() res: Response) {
     try {
       console.log('🖼️ Magic Hour API requesting direct image:', id);
       
@@ -334,7 +334,7 @@ export class PhotosController {
     return {
       ...result,
       photos: result.photos.map(photo => ({
-        
+        id: photo.id,
         filename: photo.filename,
         title: photo.title,
         description: photo.description,
@@ -739,7 +739,7 @@ Use the exact format above. Replace the example values with what you see in the 
   // Placeholder image endpoints for development/testing
   @Get('placeholder/:width/:height')
   async getPlaceholderImage(
-    @Param("id") id: string,
+    @Param("width") width: string,
     @Param('height') height: string,
     @Res() res: Response,
     @Query('text') text?: string,
@@ -771,7 +771,7 @@ Use the exact format above. Replace the example values with what you see in the 
 
   @Get('placeholder/wearable/:id')
   async getWearablePlaceholder(
-    @Param('id') 
+    @Param('id') id: string,
     @Res() res: Response,
   ) {
     try {

@@ -150,7 +150,7 @@ export class PaymentOrderService {
       // Verify user exists first
       const user = await this.prismaService.users.findUnique({
         where: { id: paymentData.userId },
-        select: {  email: true }
+        select: { id: true, email: true }
       });
 
       if (!user) {

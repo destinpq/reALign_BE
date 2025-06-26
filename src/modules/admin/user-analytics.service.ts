@@ -80,7 +80,7 @@ export class UserAnalyticsService {
       const user = await this.prismaService.users.findUnique({
         where: { id: userId },
         select: {
-          
+          id: true,
           email: true,
           firstName: true,
           lastName: true,
@@ -290,7 +290,7 @@ export class UserAnalyticsService {
       const topActiveUsersDetails = await this.prismaService.users.findMany({
         where: { id: { in: topActiveUserIds as string[] } },
         select: {
-          
+          id: true,
           email: true,
           firstName: true,
           lastName: true,
@@ -338,7 +338,7 @@ export class UserAnalyticsService {
       const topViolatorIds = topViolators.map(v => v.userId).filter(Boolean);
       const topViolatorsDetails = await this.prismaService.users.findMany({
         where: { id: { in: topViolatorIds as string[] } },
-        select: {  email: true },
+        select: { id: true, email: true },
       });
 
       const topViolatorsWithDetails = topViolatorIds.map(userId => {
@@ -476,7 +476,7 @@ export class UserAnalyticsService {
       const users = await this.prismaService.users.findMany({
         where: { id: { in: userIds } },
         select: {
-          
+          id: true,
           email: true,
           firstName: true,
           lastName: true,

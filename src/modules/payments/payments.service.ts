@@ -277,7 +277,7 @@ export class PaymentsService {
       // 🔥 VERIFY USER EXISTS FIRST!
       const user = await this.prismaService.users.findUnique({
         where: { id: paymentData.userId },
-        select: {  email: true }
+        select: { id: true, email: true }
       });
 
       if (!user) {
@@ -568,6 +568,7 @@ export class PaymentsService {
         type: subscriptionType,
         creditsIncluded: creditPackage.credits,
         endDate,
+        updatedAt: new Date(),
       },
     });
 

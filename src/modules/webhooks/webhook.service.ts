@@ -132,7 +132,7 @@ export class WebhookService {
     });
   }
 
-  async updateWebhookEndpoint( updates: any): Promise<any> {
+  async updateWebhookEndpoint(id: string, updates: any): Promise<any> {
     return this.prisma.webhook_endpoints.update({
       where: { id },
       data: updates,

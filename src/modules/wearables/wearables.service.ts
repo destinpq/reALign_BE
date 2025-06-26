@@ -110,7 +110,7 @@ export class WearablesService {
     });
   }
 
-  async updateWearable( updateWearableDto: UpdateWearableDto) {
+  async updateWearable(id: string, updateWearableDto: UpdateWearableDto) {
     const wearable = await this.prisma.wearable_items.findUnique({
       where: { id },
     });
@@ -171,7 +171,7 @@ export class WearablesService {
       include: {
         wearable_items: {
           select: {
-            
+            id: true,
             category: true,
             name: true,
             description: true,
@@ -265,7 +265,7 @@ export class WearablesService {
     return this.getWearableById(id);
   }
 
-  async update( updateWearableDto: any) {
+  async update(id: string, updateWearableDto: any) {
     return this.updateWearable(id, updateWearableDto);
   }
 

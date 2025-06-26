@@ -156,7 +156,7 @@ export class WearablesController {
     description: 'Wearable item updated successfully',
   })
   async update(
-    @Param('id') 
+    @Param('id') id: string,
     @Body() updateWearableDto: UpdateWearableDto,
   ) {
     return this.wearablesService.update(id, updateWearableDto);

@@ -32,6 +32,7 @@ export class SubscriptionService {
           type: subscriptionType,
           creditsIncluded: creditPackage.credits,
           endDate,
+          updatedAt: new Date(),
         },
       });
 
