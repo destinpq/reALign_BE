@@ -36,9 +36,27 @@ export class WebhookController {
     @Body() payload: any,
     @Headers('signature') signature: string,
   ) {
-    // TODO: Implement Magic Hour completion webhook
-    console.log('Magic Hour completion webhook received:', payload);
-    return { success: true, message: 'Webhook received' };
+    console.log('🎉 Magic Hour completion webhook received:', payload);
+    
+    try {
+      // Extract job ID from payload
+      const jobId = payload.id || payload.job_id || payload.jobId;
+      
+      if (!jobId) {
+        console.error('❌ No job ID found in webhook payload');
+        return { success: false, message: 'No job ID provided' };
+      }
+      
+      console.log('🔄 Processing completed Magic Hour job:', jobId);
+      
+      // Call the webhook service to handle the completion
+      await this.webhookService.handleMagicHourCompletion(jobId, payload);
+      
+      return { success: true, message: 'Magic Hour completion processed successfully' };
+    } catch (error) {
+      console.error('❌ Error processing Magic Hour completion webhook:', error);
+      return { success: false, message: 'Error processing webhook' };
+    }
   }
 
   @Post('magic-hour/failed')

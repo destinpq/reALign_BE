@@ -8,6 +8,52 @@ import { MagicHourService } from './magic-hour.service';
 export class MagicHourController {
   constructor(private readonly magicHourService: MagicHourService) {}
 
+  @Post('generate-and-upload-headshot')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Generate AI headshot using Magic Hour AI and upload to S3' })
+  @ApiResponse({ status: 201, description: 'AI headshot generation and upload completed successfully' })
+  @ApiResponse({ status: 401, description: 'User not authenticated' })
+  @ApiResponse({ status: 500, description: 'Magic Hour API error or server error' })
+  async generateAndUploadHeadshot(
+    @Body() body: { prompt: string },
+    @Request() req,
+  ) {
+    const userId = req.user.id;
+    console.log('🎨 Magic Hour AI headshot generation requested for user:', userId);
+    
+    console.log('📊 Request data:', {
+      prompt: body.prompt,
+      userId: userId,
+    });
+    
+    try {
+      const s3Url = await this.magicHourService.generateAndUploadImage(body.prompt);
+
+      console.log('✅ Magic Hour AI headshot generation completed successfully');
+      
+      return {
+        success: true,
+        data: {
+          s3Url,
+          httpsUrl: s3Url.replace('s3://', 'https://').replace(`${process.env.AWS_S3_BUCKET_NAME || 'realign'}/`, `${process.env.AWS_S3_BUCKET_NAME || 'realign'}.s3.amazonaws.com/`),
+          prompt: body.prompt,
+        },
+        message: 'AI headshot generated and uploaded to S3 successfully',
+        timestamp: new Date().toISOString(),
+      };
+    } catch (error) {
+      console.error('❌ Magic Hour AI headshot generation failed:', error);
+      
+      return {
+        success: false,
+        error: error.message || 'AI headshot generation failed',
+        message: 'Failed to generate and upload AI headshot',
+        timestamp: new Date().toISOString(),
+      };
+    }
+  }
+
   @Post('direct-professional-avatar')
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()

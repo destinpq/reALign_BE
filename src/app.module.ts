@@ -20,6 +20,7 @@ import { AuditModule } from './modules/audit/audit.module';
 import { EmailModule } from './modules/email/email.module';
 import { TransactionModule } from './modules/transactions/transaction.module';
 import { HealthModule } from './common/health/health.module';
+import { S3UploadModule } from './modules/s3-upload/s3-upload.module';
 import { AuthLogoutInterceptor } from './guards/auth-logout.interceptor';
 
 @Module({
@@ -61,6 +62,7 @@ import { AuthLogoutInterceptor } from './guards/auth-logout.interceptor';
     EmailModule,
     TransactionModule,
     HealthModule,
+    S3UploadModule,
   ],
   controllers: [AppController],
   providers: [

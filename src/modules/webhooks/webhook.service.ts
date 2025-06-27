@@ -23,6 +23,144 @@ export class WebhookService {
   ) {}
 
   // ========================================
+  // MAGIC HOUR WEBHOOK HANDLERS
+  // ========================================
+
+  async handleMagicHourCompletion(jobId: string, payload: any): Promise<void> {
+    try {
+      console.log('🎯 Processing Magic Hour completion for job:', jobId);
+      console.log('📦 Payload:', JSON.stringify(payload, null, 2));
+
+      // Extract the actual image URL from the payload
+      let actualImageUrl = null;
+      
+      // Try different possible locations for the image URL in the payload
+      if (payload.status === 'completed' || payload.status === 'success') {
+        actualImageUrl = payload.result?.output_url || 
+                        payload.result?.image_url ||
+                        payload.output_url ||
+                        payload.image_url ||
+                        payload.result?.url ||
+                        payload.url ||
+                        payload.result?.download_url ||
+                        payload.download_url;
+      }
+
+      if (!actualImageUrl) {
+        console.error('❌ No image URL found in Magic Hour completion payload');
+        console.error('Full payload:', JSON.stringify(payload, null, 2));
+        
+        // Log the webhook delivery as failed
+        await this.logWebhookDelivery({
+          source: 'Magic Hour',
+          eventType: 'job_completed',
+          payload,
+          status: 'FAILED',
+          error: 'No image URL found in completion payload',
+        });
+        return;
+      }
+
+      console.log('🔍 Found image URL in completion:', actualImageUrl);
+
+      // Download and upload the image to S3
+      const s3Url = await this.downloadAndUploadMagicHourImage(actualImageUrl, jobId);
+      
+      if (s3Url) {
+        console.log('🎉 Successfully uploaded Magic Hour result to S3:', s3Url);
+        
+        // TODO: Update the database record with the final S3 URL
+        // This would update the user's avatar generation record
+        // await this.updateAvatarGenerationRecord(jobId, s3Url);
+        
+        // Log successful webhook delivery
+        await this.logWebhookDelivery({
+          source: 'Magic Hour',
+          eventType: 'job_completed',
+          payload: { ...payload, final_s3_url: s3Url },
+          status: 'SUCCESS',
+        });
+      } else {
+        console.error('❌ Failed to download and upload Magic Hour image');
+        
+        // Log failed webhook delivery
+        await this.logWebhookDelivery({
+          source: 'Magic Hour',
+          eventType: 'job_completed',
+          payload,
+          status: 'FAILED',
+          error: 'Failed to download and upload image to S3',
+        });
+      }
+    } catch (error) {
+      console.error('❌ Error handling Magic Hour completion:', error);
+      
+      // Log failed webhook delivery
+      await this.logWebhookDelivery({
+        source: 'Magic Hour',
+        eventType: 'job_completed',
+        payload,
+        status: 'FAILED',
+        error: error.message,
+      });
+    }
+  }
+
+  private async downloadAndUploadMagicHourImage(imageUrl: string, jobId: string): Promise<string | null> {
+    try {
+      console.log(`🔍 Downloading Magic Hour image from: ${imageUrl}`);
+      
+      const magicHourApiKey = this.configService.get<string>('MAGIC_HOUR_API_KEY');
+      
+      // Download the actual image
+      const imageResponse = await fetch(imageUrl, {
+        headers: {
+          'Authorization': `Bearer ${magicHourApiKey}`,
+        },
+      });
+      
+      if (!imageResponse.ok) {
+        console.error(`❌ Failed to download image: ${imageResponse.status} ${imageResponse.statusText}`);
+        return null;
+      }
+      
+      const imageBuffer = await imageResponse.arrayBuffer();
+      const buffer = Buffer.from(imageBuffer);
+      
+      console.log(`✅ Downloaded image: ${buffer.length} bytes`);
+      
+      // Generate unique filename
+      const timestamp = Date.now();
+      const filename = `magic-hour-${jobId}-${timestamp}.jpg`;
+      const s3Key = `magic-hour-generated/${filename}`;
+      
+      // Upload to our S3
+      const AWS = require('aws-sdk');
+      const s3 = new AWS.S3({
+        accessKeyId: process.env.AWS_ACCESS_KEY_ID,
+        secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
+        region: process.env.AWS_REGION || 'us-east-1',
+      });
+      
+      const uploadParams = {
+        Bucket: process.env.AWS_S3_BUCKET_NAME || 'realign',
+        Key: s3Key,
+        Body: buffer,
+        ContentType: 'image/jpeg',
+        ACL: 'public-read',
+      };
+      
+      const uploadResult = await s3.upload(uploadParams).promise();
+      console.log(`🎉 Successfully uploaded to S3: ${uploadResult.Location}`);
+      
+      return uploadResult.Location;
+    } catch (error) {
+      console.error('❌ Error downloading and uploading Magic Hour image:', error);
+      return null;
+    }
+  }
+
+  // ========================================
   // WEBHOOK SIGNATURE VERIFICATION
   // ========================================
 
