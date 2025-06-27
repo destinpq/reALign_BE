@@ -60,7 +60,7 @@ async function bootstrap() {
   app.use(compression());
   app.use(cookieParser());
 
-  // Enable CORS for frontend communication
+  // Enable CORS for frontend communication with more permissive settings
   app.enableCors({
     origin: [
       'http://localhost:1000',
@@ -68,10 +68,23 @@ async function bootstrap() {
       'http://localhost:3001',
       'https://realign.destinpq.com',
       'https://realign-frontend.destinpq.com',
+      'https://www.realign.destinpq.com',
     ],
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'Accept'],
+    allowedHeaders: [
+      'Content-Type', 
+      'Authorization', 
+      'Accept',
+      'Origin',
+      'X-Requested-With',
+      'Cache-Control',
+      'Accept-Encoding',
+      'User-Agent',
+      'Referer'
+    ],
+    exposedHeaders: ['X-Auth-Logout', 'X-Auth-Reason'],
+    optionsSuccessStatus: 200, // Some legacy browsers choke on 204
   });
 
   // Global validation pipe
@@ -91,14 +104,26 @@ async function bootstrap() {
 
   // Add placeholder route mapping for different path patterns
   app.use('/api/placeholder', (req, res, next) => {
-    // Redirect placeholder requests to photos controller
-    req.url = `/api/v1/photos/placeholder${req.url}`;
+    // Extract the path after /api/placeholder and prepend /api/v1/photos/placeholder
+    const placeholderPath = req.url; // This is the path after /api/placeholder
+    req.url = `/api/v1/photos/placeholder${placeholderPath}`;
     next();
   });
 
   // Additional placeholder mapping for root level requests
   app.use('/placeholder', (req, res, next) => {
     req.url = `/api/v1/photos/placeholder${req.url}`;
+    next();
+  });
+
+  // Handle direct placeholder requests that might be missing the prefix
+  app.use('/api/:width/:height', (req, res, next) => {
+    // This catches URLs like /api/150/150 and redirects to placeholder
+    const { width, height } = req.params;
+    if (!isNaN(Number(width)) && !isNaN(Number(height))) {
+      res.redirect(`/api/v1/photos/placeholder/${width}/${height}`);
+      return;
+    }
     next();
   });
 
