@@ -242,31 +242,44 @@ export class MagicHourService {
 
   private async downloadAndUploadMagicHourImage(jobId: string): Promise<string | null> {
     try {
-      // Magic Hour provides multiple ways to access the generated image
-      // Try different endpoints to download the actual image
-      const possibleImageUrls = [
-        `https://api.magichour.ai/v1/ai-headshot-generator/${jobId}/download`,
-        `https://api.magichour.ai/v1/jobs/${jobId}/download`,
-        `https://api.magichour.ai/v1/generations/${jobId}/download`,
-        `https://magichour.ai/api/download/${jobId}`,
-        `https://magichour.ai/download/${jobId}`,
-      ];
+      // Get the job status from Magic Hour headshot-generator endpoint
+      const statusUrl = `https://api.magichour.ai/v1/ai-headshot-generator/${jobId}`;
+      
+      console.log(`🔍 Getting job status from: ${statusUrl}`);
+      
+      const response = await fetch(statusUrl, {
+        headers: {
+          'Authorization': `Bearer ${this.magicHourApiKey}`,
+        },
+      });
 
-      for (const imageUrl of possibleImageUrls) {
-        try {
-          console.log(`🔍 Trying to download from: ${imageUrl}`);
+      if (response.ok) {
+        const jobStatus = await response.json();
+        console.log(`✅ Got job status:`, JSON.stringify(jobStatus, null, 2));
+        
+        // Look for the actual image URL in the response
+        let actualImageUrl = null;
+        if (jobStatus.status === 'completed' || jobStatus.status === 'success') {
+          actualImageUrl = jobStatus.result?.output_url || 
+                          jobStatus.result?.image_url ||
+                          jobStatus.output_url ||
+                          jobStatus.image_url ||
+                          jobStatus.result?.url ||
+                          jobStatus.url;
+        }
+        
+        if (actualImageUrl) {
+          console.log(`🔍 Found actual image URL: ${actualImageUrl}`);
           
-          const response = await fetch(imageUrl, {
+          // Download the actual image
+          const imageResponse = await fetch(actualImageUrl, {
             headers: {
               'Authorization': `Bearer ${this.magicHourApiKey}`,
             },
           });
-
-          if (response.ok && response.headers.get('content-type')?.startsWith('image/')) {
-            console.log(`✅ Found image at: ${imageUrl}`);
-            
-            // Download the image
-            const imageBuffer = await response.arrayBuffer();
+          
+          if (imageResponse.ok) {
+            const imageBuffer = await imageResponse.arrayBuffer();
             const buffer = Buffer.from(imageBuffer);
             
             // Generate unique filename
@@ -274,7 +287,7 @@ export class MagicHourService {
             const filename = `magic-hour-${jobId}-${timestamp}.jpg`;
             const s3Key = `magic-hour-generated/${filename}`;
             
-            // Upload to our S3 (assuming you have AWS SDK configured)
+            // Upload to our S3
             const AWS = require('aws-sdk');
             const s3 = new AWS.S3({
               accessKeyId: process.env.AWS_ACCESS_KEY_ID,
@@ -295,11 +308,15 @@ export class MagicHourService {
             
             return uploadResult.Location;
           } else {
-            console.log(`❌ ${imageUrl} returned ${response.status} or not an image`);
+            console.log(`❌ Failed to download actual image: ${imageResponse.status}`);
           }
-        } catch (error) {
-          console.log(`❌ Failed to download from ${imageUrl}: ${error.message}`);
+        } else {
+          console.log(`❌ No image URL found in job status response`);
         }
+      } else {
+        console.log(`❌ Magic Hour status check failed: ${response.status} ${response.statusText}`);
+        const errorText = await response.text();
+        console.log(`❌ Error response: ${errorText}`);
       }
       
       console.log('❌ All download attempts failed');
