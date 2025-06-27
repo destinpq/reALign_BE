@@ -41,7 +41,7 @@ export class MagicHourService {
 
       const response = await firstValueFrom(
         this.httpService.post(
-          `${this.magicHourBaseUrl}/v1/ai-headshot-generator`,
+          'https://api.magichour.ai/v1/ai-headshot-generator',
           requestBody,
           {
             headers: {
