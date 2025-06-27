@@ -36,7 +36,7 @@ export class MagicHourService {
           image_file_path: imageUrl
         }
       };
-
+      
       console.log('🚀 Magic Hour Request Body:', JSON.stringify(requestBody, null, 2));
 
       const response = await firstValueFrom(
@@ -53,13 +53,30 @@ export class MagicHourService {
         )
       );
 
-      const generatedImageUrl = response.data?.image_url || response.data?.url || response.data?.downloads?.[0]?.url;
+      console.log('🎯 Magic Hour API Response:', JSON.stringify(response.data, null, 2));
+      
+      // Magic Hour API returns job info - return this directly
+      const jobId = response.data?.id;
+      
+      if (!jobId) {
+        console.error('❌ No job ID found in Magic Hour response');
+        throw new HttpException('Magic Hour job creation failed', HttpStatus.INTERNAL_SERVER_ERROR);
+      }
+
+      console.log('✅ Magic Hour job created successfully:', jobId);
+      console.log('🔄 Polling for completion...');
+
+      // Poll for completion (like we tested before!)
+      const result = await this.pollForCompletion(jobId);
+      const generatedImageUrl = result?.downloads?.[0]?.url;
       
       if (!generatedImageUrl) {
         throw new HttpException('Image generation failed - no image URL returned', HttpStatus.INTERNAL_SERVER_ERROR);
       }
       
-      // Download and upload to S3
+      console.log('✅ Got image URL from Magic Hour:', generatedImageUrl);
+      
+      // Download and upload to S3 (like we tested!)
       const imageResponse = await firstValueFrom(
         this.httpService.get(generatedImageUrl, { responseType: 'arraybuffer' })
       );
@@ -74,15 +91,18 @@ export class MagicHourService {
         'image/png'
       );
 
+      console.log('✅ Uploaded to S3:', uploadResult);
+
       return {
         success: true,
         data: {
-          prompt: `professional, business attire, good posture, ${prompt}`,
+          prompt: "professional, business attire, good posture",
           s3Url: uploadResult,
           httpsUrl: uploadResult,
           fileName,
           s3Key,
           originalImageUrl: imageUrl,
+          jobId: jobId
         }
       };
 
@@ -99,4 +119,39 @@ export class MagicHourService {
   }
 
   
+  private async pollForCompletion(jobId: string, maxAttempts = 30): Promise<any> {
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      try {
+        console.log(`🔄 Polling attempt ${attempt} for job: ${jobId}`);
+        
+        const response = await firstValueFrom(
+          this.httpService.get(`https://api.magichour.ai/v1/ai-headshot-generator/${jobId}`, {
+              headers: {
+                'Authorization': `Bearer ${this.magicHourApiKey}`,
+            },
+          })
+        );
+
+        console.log(`📊 Job status:`, response.data?.status);
+
+        if (response.data.status === 'completed' && response.data.downloads?.length > 0) {
+          console.log('🎉 Job completed successfully!');
+          return response.data;
+        }
+
+        if (response.data.status === 'failed') {
+          throw new Error('Magic Hour job failed');
+        }
+
+        await new Promise(resolve => setTimeout(resolve, 2000));
+      } catch (error) {
+        if (attempt === maxAttempts) {
+          throw error;
+        }
+        await new Promise(resolve => setTimeout(resolve, 2000));
+      }
+    }
+
+    throw new Error('Magic Hour job timed out');
+  }
 } 
