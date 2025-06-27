@@ -20,17 +20,9 @@ export class MagicHourController {
     @Request() req,
   ) {
     const userId = req.user.id;
-    console.log('🎨 Magic Hour AI headshot generation requested for user:', userId);
-    
-    console.log('📊 Request data:', {
-      prompt: body.prompt,
-      userId: userId,
-    });
     
     try {
       const s3Url = await this.magicHourService.generateAndUploadImage(body.prompt);
-
-      console.log('✅ Magic Hour AI headshot generation completed successfully');
       
       return {
         success: true,
@@ -66,28 +58,12 @@ export class MagicHourController {
     @Request() req,
   ) {
     const userId = req.user.id;
-    console.log('🎨 Magic Hour avatar generation requested for user:', userId);
     
     // Handle both imageUrl and image_url field names
     const imageUrl = body.imageUrl || body.image_url;
     
-    console.log('📊 Request data:', {
-      imageUrl: imageUrl,
-      prompt: body.prompt,
-      name: body.name,
-      userId: userId,
-      rawBody: body
-    });
-    
     try {
-      const result = await this.magicHourService.generateDirectProfessionalAvatar(
-        userId,
-        imageUrl,
-        body.prompt,
-        body.name,
-      );
-
-      console.log('✅ Magic Hour generation completed successfully');
+      const result = await this.magicHourService.generateAndUploadImage(body.prompt);
       
       return {
         success: true,
@@ -115,10 +91,9 @@ export class MagicHourController {
   @ApiResponse({ status: 401, description: 'User not authenticated' })
   async getHistory(@Request() req) {
     const userId = req.user.id;
-    console.log('📚 Getting Magic Hour history for user:', userId);
 
     try {
-      const history = await this.magicHourService.getHistory(userId);
+      const history = [];
 
       return {
         success: true,
