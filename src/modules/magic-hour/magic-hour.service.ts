@@ -190,47 +190,31 @@ export class MagicHourService {
       console.log('🔑 Extracted job ID:', jobResult.id);
       console.log('💰 Credits charged:', jobResult.credits_charged);
       
-      // Step 2: Poll for completion and then download the image
+      // Step 2: Wait for job completion and upload to S3
       if (jobResult.id) {
-        console.log('🔄 Job submitted, now polling for completion...');
-        const actualImageUrl = await this.pollMagicHourJob(jobResult.id);
+        console.log('🔄 Job submitted, now waiting for completion and uploading to S3...');
         
-        if (actualImageUrl) {
-          console.log('🎉 Job completed, downloading and uploading to our S3...');
-          const ourS3Url = await this.downloadImageAndUploadToS3(actualImageUrl, jobResult.id);
-          
-          if (ourS3Url) {
-            console.log('🎉 Successfully downloaded and uploaded to our S3:', ourS3Url);
-            return {
-              id: jobResult.id,
-              image_url: ourS3Url,
-              s3_url: ourS3Url,
-              generated_image_url: ourS3Url,
-              imageUrl: ourS3Url,
-              generatedImageUrl: ourS3Url,
-              status: 'COMPLETED',
-              frame_cost: jobResult.frame_cost,
-              credits_charged: jobResult.credits_charged,
-              dashboard_url: `https://magichour.ai/dashboard/images/${jobResult.id}`,
-              isNewGeneration: true,
-            };
-          }
+        const s3Url = await this.waitForCompletionAndUpload(jobResult.id);
+        
+        if (s3Url) {
+          console.log('🎉 SUCCESS! Job completed and uploaded to S3:', s3Url);
+          return {
+            id: jobResult.id,
+            image_url: s3Url,
+            s3_url: s3Url,
+            generated_image_url: s3Url,
+            imageUrl: s3Url,
+            generatedImageUrl: s3Url,
+            status: 'COMPLETED',
+            frame_cost: jobResult.frame_cost,
+            credits_charged: jobResult.credits_charged,
+            dashboard_url: `https://magichour.ai/dashboard/images/${jobResult.id}`,
+            isNewGeneration: true,
+          };
+        } else {
+          console.log('❌ Failed to complete job or upload to S3');
+          throw new Error('Failed to generate and upload image');
         }
-        
-        console.log('⚠️ Failed to get completed image, returning job info for later polling');
-        return {
-          id: jobResult.id,
-          image_url: jobResult.dashboard_url || `https://magichour.ai/dashboard/images/${jobResult.id}`,
-          s3_url: jobResult.dashboard_url || `https://magichour.ai/dashboard/images/${jobResult.id}`,
-          generated_image_url: jobResult.dashboard_url || `https://magichour.ai/dashboard/images/${jobResult.id}`,
-          imageUrl: jobResult.dashboard_url || `https://magichour.ai/dashboard/images/${jobResult.id}`,
-          generatedImageUrl: jobResult.dashboard_url || `https://magichour.ai/dashboard/images/${jobResult.id}`,
-          status: 'PROCESSING',
-          frame_cost: jobResult.frame_cost,
-          credits_charged: jobResult.credits_charged,
-          dashboard_url: jobResult.dashboard_url || `https://magichour.ai/dashboard/images/${jobResult.id}`,
-          isNewGeneration: true,
-        };
       } else {
         console.error('❌ No job ID returned from Magic Hour API!');
         console.error('Full response:', JSON.stringify(jobResult, null, 2));
@@ -514,6 +498,150 @@ export class MagicHourService {
       hash = hash & hash; // Convert to 32bit integer
     }
     return Math.abs(hash).toString(36);
+  }
+
+  private async waitForCompletionAndUpload(jobId: string): Promise<string | null> {
+    console.log('🚀 Waiting for Magic Hour job completion:', jobId);
+    
+    // Poll every 30 seconds for up to 10 minutes
+    const maxAttempts = 20;
+    const pollInterval = 30000;
+    
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      try {
+        console.log(`🔄 Poll attempt ${attempt}/${maxAttempts} for job ${jobId}`);
+        
+        const statusUrl = `https://api.magichour.ai/v1/ai-headshot-generator/${jobId}`;
+        const response = await fetch(statusUrl, {
+          headers: {
+            'Authorization': `Bearer ${this.magicHourApiKey}`,
+          },
+        });
+
+        if (response.ok) {
+          const jobStatus = await response.json();
+          console.log(`📊 Job ${jobId} status:`, jobStatus.status);
+
+          if (jobStatus.status === 'completed' || jobStatus.status === 'success') {
+            // Job is complete, get the image URL
+            const actualImageUrl = jobStatus.result?.output_url || 
+                                  jobStatus.result?.image_url ||
+                                  jobStatus.output_url ||
+                                  jobStatus.image_url ||
+                                  jobStatus.result?.url ||
+                                  jobStatus.url;
+
+            if (actualImageUrl) {
+              console.log('🎯 Job completed! Downloading and uploading to S3...');
+              
+              // Download the image
+              const imageResponse = await fetch(actualImageUrl, {
+                headers: {
+                  'Authorization': `Bearer ${this.magicHourApiKey}`,
+                },
+              });
+              
+              if (imageResponse.ok) {
+                const imageBuffer = await imageResponse.arrayBuffer();
+                const buffer = Buffer.from(imageBuffer);
+                
+                // Create unique S3 key
+                const timestamp = Date.now();
+                const s3Key = `magic-hour-generated/magic-hour-${jobId}-${timestamp}.jpg`;
+                
+                // Upload to S3
+                const AWS = require('aws-sdk');
+                const s3 = new AWS.S3({
+                  accessKeyId: process.env.AWS_ACCESS_KEY_ID,
+                  secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
+                  region: process.env.AWS_REGION || 'us-east-1',
+                });
+                
+                const uploadParams = {
+                  Bucket: process.env.AWS_S3_BUCKET_NAME || 'realign',
+                  Key: s3Key,
+                  Body: buffer,
+                  ContentType: 'image/jpeg',
+                  ACL: 'public-read',
+                };
+                
+                const uploadResult = await s3.upload(uploadParams).promise();
+                console.log(`🎉 SUCCESS! Image uploaded to S3: ${uploadResult.Location}`);
+                return uploadResult.Location;
+              }
+            }
+          } else if (jobStatus.status === 'failed' || jobStatus.status === 'error') {
+            console.error('❌ Magic Hour job failed:', jobStatus);
+            return null;
+          }
+        }
+        
+        // Wait before next poll
+        if (attempt < maxAttempts) {
+          console.log(`⏳ Job still processing, waiting ${pollInterval/1000}s...`);
+          await new Promise(resolve => setTimeout(resolve, pollInterval));
+        }
+      } catch (error) {
+        console.error(`❌ Error polling job:`, error);
+      }
+    }
+    
+    console.error(`⏰ Timeout waiting for job ${jobId} to complete`);
+    return null;
+  }
+
+  async downloadCompletedJob(jobId: string): Promise<string | null> {
+    console.log('🔄 Downloading completed Magic Hour job:', jobId);
+    
+    try {
+      // Try to get the completed job from Magic Hour
+      const statusUrl = `https://api.magichour.ai/v1/ai-headshot-generator/${jobId}`;
+      console.log('🔍 Checking job status at:', statusUrl);
+      
+      const response = await fetch(statusUrl, {
+        headers: {
+          'Authorization': `Bearer ${this.magicHourApiKey}`,
+        },
+      });
+
+      if (response.ok) {
+        const jobStatus = await response.json();
+        console.log('✅ Job status response:', JSON.stringify(jobStatus, null, 2));
+        
+        // Look for the actual image URL in the response
+        let actualImageUrl = null;
+        if (jobStatus.status === 'completed' || jobStatus.status === 'success') {
+          actualImageUrl = jobStatus.result?.output_url || 
+                          jobStatus.result?.image_url ||
+                          jobStatus.output_url ||
+                          jobStatus.image_url ||
+                          jobStatus.result?.url ||
+                          jobStatus.url ||
+                          jobStatus.result?.file_url ||
+                          jobStatus.file_url;
+        }
+        
+        if (actualImageUrl) {
+          console.log('🎯 Found actual image URL:', actualImageUrl);
+          
+          // Download and upload to S3
+          const s3Url = await this.downloadImageAndUploadToS3(actualImageUrl, jobId);
+          if (s3Url) {
+            console.log('🎉 Successfully uploaded to S3:', s3Url);
+            return s3Url;
+          }
+        } else {
+          console.log('⚠️ Job not completed yet or no image URL found');
+        }
+      } else {
+        console.log('❌ Failed to get job status:', response.status, response.statusText);
+      }
+      
+      return null;
+    } catch (error) {
+      console.error('❌ Error downloading completed job:', error);
+      return null;
+    }
   }
 
   async getHistory(userId: string) {
