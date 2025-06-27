@@ -190,43 +190,47 @@ export class MagicHourService {
       console.log('🔑 Extracted job ID:', jobResult.id);
       console.log('💰 Credits charged:', jobResult.credits_charged);
       
-      // Step 2: Download the image from Magic Hour and upload to our S3
+      // Step 2: Poll for completion and then download the image
       if (jobResult.id) {
-        console.log('🔄 Downloading image from Magic Hour and uploading to our S3...');
-        const ourS3Url = await this.downloadAndUploadMagicHourImage(jobResult.id);
+        console.log('🔄 Job submitted, now polling for completion...');
+        const actualImageUrl = await this.pollMagicHourJob(jobResult.id);
         
-        if (ourS3Url) {
-          console.log('🎉 Successfully downloaded and uploaded to our S3:', ourS3Url);
-          return {
-            id: jobResult.id,
-            image_url: ourS3Url,
-            s3_url: ourS3Url,
-            generated_image_url: ourS3Url,
-            imageUrl: ourS3Url,
-            generatedImageUrl: ourS3Url,
-            status: 'COMPLETED',
-            frame_cost: jobResult.frame_cost,
-            credits_charged: jobResult.credits_charged,
-            dashboard_url: `https://magichour.ai/dashboard/images/${jobResult.id}`,
-            isNewGeneration: true,
-          };
-        } else {
-          console.log('⚠️ Failed to download image, returning dashboard URL');
-          const dashboardUrl = `https://magichour.ai/dashboard/images/${jobResult.id}`;
-          return {
-            id: jobResult.id,
-            image_url: dashboardUrl,
-            s3_url: dashboardUrl,
-            generated_image_url: dashboardUrl,
-            imageUrl: dashboardUrl,
-            generatedImageUrl: dashboardUrl,
-            status: 'PROCESSING',
-            frame_cost: jobResult.frame_cost,
-            credits_charged: jobResult.credits_charged,
-            dashboard_url: dashboardUrl,
-            isNewGeneration: true,
-          };
+        if (actualImageUrl) {
+          console.log('🎉 Job completed, downloading and uploading to our S3...');
+          const ourS3Url = await this.downloadImageAndUploadToS3(actualImageUrl, jobResult.id);
+          
+          if (ourS3Url) {
+            console.log('🎉 Successfully downloaded and uploaded to our S3:', ourS3Url);
+            return {
+              id: jobResult.id,
+              image_url: ourS3Url,
+              s3_url: ourS3Url,
+              generated_image_url: ourS3Url,
+              imageUrl: ourS3Url,
+              generatedImageUrl: ourS3Url,
+              status: 'COMPLETED',
+              frame_cost: jobResult.frame_cost,
+              credits_charged: jobResult.credits_charged,
+              dashboard_url: `https://magichour.ai/dashboard/images/${jobResult.id}`,
+              isNewGeneration: true,
+            };
+          }
         }
+        
+        console.log('⚠️ Failed to get completed image, returning job info for later polling');
+        return {
+          id: jobResult.id,
+          image_url: jobResult.dashboard_url || `https://magichour.ai/dashboard/images/${jobResult.id}`,
+          s3_url: jobResult.dashboard_url || `https://magichour.ai/dashboard/images/${jobResult.id}`,
+          generated_image_url: jobResult.dashboard_url || `https://magichour.ai/dashboard/images/${jobResult.id}`,
+          imageUrl: jobResult.dashboard_url || `https://magichour.ai/dashboard/images/${jobResult.id}`,
+          generatedImageUrl: jobResult.dashboard_url || `https://magichour.ai/dashboard/images/${jobResult.id}`,
+          status: 'PROCESSING',
+          frame_cost: jobResult.frame_cost,
+          credits_charged: jobResult.credits_charged,
+          dashboard_url: jobResult.dashboard_url || `https://magichour.ai/dashboard/images/${jobResult.id}`,
+          isNewGeneration: true,
+        };
       } else {
         console.error('❌ No job ID returned from Magic Hour API!');
         console.error('Full response:', JSON.stringify(jobResult, null, 2));
@@ -327,9 +331,63 @@ export class MagicHourService {
     }
   }
 
+  private async downloadImageAndUploadToS3(imageUrl: string, jobId: string): Promise<string | null> {
+    try {
+      console.log(`🔍 Downloading image from: ${imageUrl}`);
+      
+      // Download the actual image
+      const imageResponse = await fetch(imageUrl, {
+        headers: {
+          'Authorization': `Bearer ${this.magicHourApiKey}`,
+        },
+      });
+      
+      if (imageResponse.ok) {
+        const imageBuffer = await imageResponse.arrayBuffer();
+        const buffer = Buffer.from(imageBuffer);
+        
+        // Generate unique filename
+        const timestamp = Date.now();
+        const filename = `magic-hour-${jobId}-${timestamp}.jpg`;
+        const s3Key = `magic-hour-generated/${filename}`;
+        
+        // Upload to our S3
+        const AWS = require('aws-sdk');
+        const s3 = new AWS.S3({
+          accessKeyId: process.env.AWS_ACCESS_KEY_ID,
+          secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
+          region: process.env.AWS_REGION || 'us-east-1',
+        });
+        
+        const uploadParams = {
+          Bucket: process.env.AWS_S3_BUCKET_NAME || 'realign',
+          Key: s3Key,
+          Body: buffer,
+          ContentType: 'image/jpeg',
+          ACL: 'public-read',
+        };
+        
+        const uploadResult = await s3.upload(uploadParams).promise();
+        console.log(`🎉 Successfully uploaded to S3: ${uploadResult.Location}`);
+        
+        return uploadResult.Location;
+      } else {
+        console.log(`❌ Failed to download image: ${imageResponse.status}`);
+        return null;
+      }
+    } catch (error) {
+      console.error('❌ Error downloading and uploading image:', error);
+      return null;
+    }
+  }
+
   private async pollMagicHourJob(jobId: string): Promise<string | null> {
     const maxAttempts = 30; // Poll for up to 5 minutes (30 * 10 seconds)
     const pollInterval = 10000; // 10 seconds
+    
+    // Wait 30 seconds before first check to give Magic Hour time to process
+    console.log('⏳ Waiting 30 seconds before first status check...');
+    await new Promise(resolve => setTimeout(resolve, 30000));
 
     for (let attempt = 1; attempt <= maxAttempts; attempt++) {
       try {
