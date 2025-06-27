@@ -24,19 +24,22 @@ export class MagicHourService {
     try {
       const enhancedPrompt = `professional headshot portrait, ${prompt}, high-quality photography, studio lighting, business attire, clean background, professional headshot style`;
       
-      // Use the direct image generation endpoint - NO POLLING NEEDED
+      // Use the correct Magic Hour AI headshot generator endpoint
       const response = await firstValueFrom(
         this.httpService.post(
-          `${this.magicHourBaseUrl}/v1/ai-image-generator-sync`,
+          `${this.magicHourBaseUrl}/v1/ai-headshot-generator`,
           {
-            prompt: enhancedPrompt,
-            aspect_ratio: 'portrait',
-            style: 'photorealistic',
-            quality: 'standard',
+            name: "AI Headshot image",
+            style: {
+              prompt: enhancedPrompt
+            },
+            assets: {
+              image_file_path: "api-assets/id/default.png" // Default placeholder
+            }
           },
           {
             headers: {
-              'X-API-Key': this.magicHourApiKey,
+              'Authorization': `Bearer ${this.magicHourApiKey}`,
               'Content-Type': 'application/json',
             },
             timeout: 60000, // 60 second timeout
