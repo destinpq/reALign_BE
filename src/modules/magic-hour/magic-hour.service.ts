@@ -190,20 +190,20 @@ export class MagicHourService {
       console.log('🔑 Extracted job ID:', jobResult.id);
       console.log('💰 Credits charged:', jobResult.credits_charged);
       
-      // Step 2: Poll for completion and get actual image URL
+      // Step 2: Download the image from Magic Hour and upload to our S3
       if (jobResult.id) {
-        console.log('🔄 Polling Magic Hour job for completion...');
-        const actualImageUrl = await this.pollMagicHourJob(jobResult.id);
+        console.log('🔄 Downloading image from Magic Hour and uploading to our S3...');
+        const ourS3Url = await this.downloadAndUploadMagicHourImage(jobResult.id);
         
-        if (actualImageUrl) {
-          console.log('🎉 Got actual Magic Hour image URL:', actualImageUrl);
+        if (ourS3Url) {
+          console.log('🎉 Successfully downloaded and uploaded to our S3:', ourS3Url);
           return {
             id: jobResult.id,
-            image_url: actualImageUrl,
-            s3_url: actualImageUrl,
-            generated_image_url: actualImageUrl,
-            imageUrl: actualImageUrl,
-            generatedImageUrl: actualImageUrl,
+            image_url: ourS3Url,
+            s3_url: ourS3Url,
+            generated_image_url: ourS3Url,
+            imageUrl: ourS3Url,
+            generatedImageUrl: ourS3Url,
             status: 'COMPLETED',
             frame_cost: jobResult.frame_cost,
             credits_charged: jobResult.credits_charged,
@@ -211,7 +211,7 @@ export class MagicHourService {
             isNewGeneration: true,
           };
         } else {
-          console.log('⚠️ Failed to get actual image URL, returning dashboard URL');
+          console.log('⚠️ Failed to download image, returning dashboard URL');
           const dashboardUrl = `https://magichour.ai/dashboard/images/${jobResult.id}`;
           return {
             id: jobResult.id,
@@ -240,6 +240,76 @@ export class MagicHourService {
     }
   }
 
+  private async downloadAndUploadMagicHourImage(jobId: string): Promise<string | null> {
+    try {
+      // Magic Hour provides multiple ways to access the generated image
+      // Try different endpoints to download the actual image
+      const possibleImageUrls = [
+        `https://api.magichour.ai/v1/ai-headshot-generator/${jobId}/download`,
+        `https://api.magichour.ai/v1/jobs/${jobId}/download`,
+        `https://api.magichour.ai/v1/generations/${jobId}/download`,
+        `https://magichour.ai/api/download/${jobId}`,
+        `https://magichour.ai/download/${jobId}`,
+      ];
+
+      for (const imageUrl of possibleImageUrls) {
+        try {
+          console.log(`🔍 Trying to download from: ${imageUrl}`);
+          
+          const response = await fetch(imageUrl, {
+            headers: {
+              'Authorization': `Bearer ${this.magicHourApiKey}`,
+            },
+          });
+
+          if (response.ok && response.headers.get('content-type')?.startsWith('image/')) {
+            console.log(`✅ Found image at: ${imageUrl}`);
+            
+            // Download the image
+            const imageBuffer = await response.arrayBuffer();
+            const buffer = Buffer.from(imageBuffer);
+            
+            // Generate unique filename
+            const timestamp = Date.now();
+            const filename = `magic-hour-${jobId}-${timestamp}.jpg`;
+            const s3Key = `magic-hour-generated/${filename}`;
+            
+            // Upload to our S3 (assuming you have AWS SDK configured)
+            const AWS = require('aws-sdk');
+            const s3 = new AWS.S3({
+              accessKeyId: process.env.AWS_ACCESS_KEY_ID,
+              secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
+              region: process.env.AWS_REGION || 'us-east-1',
+            });
+            
+            const uploadParams = {
+              Bucket: process.env.AWS_S3_BUCKET_NAME || 'realign',
+              Key: s3Key,
+              Body: buffer,
+              ContentType: 'image/jpeg',
+              ACL: 'public-read',
+            };
+            
+            const uploadResult = await s3.upload(uploadParams).promise();
+            console.log(`🎉 Successfully uploaded to S3: ${uploadResult.Location}`);
+            
+            return uploadResult.Location;
+          } else {
+            console.log(`❌ ${imageUrl} returned ${response.status} or not an image`);
+          }
+        } catch (error) {
+          console.log(`❌ Failed to download from ${imageUrl}: ${error.message}`);
+        }
+      }
+      
+      console.log('❌ All download attempts failed');
+      return null;
+    } catch (error) {
+      console.error('❌ Error downloading Magic Hour image:', error);
+      return null;
+    }
+  }
+
   private async pollMagicHourJob(jobId: string): Promise<string | null> {
     const maxAttempts = 30; // Poll for up to 5 minutes (30 * 10 seconds)
     const pollInterval = 10000; // 10 seconds
@@ -248,18 +318,48 @@ export class MagicHourService {
       try {
         console.log(`🔄 Polling attempt ${attempt}/${maxAttempts} for job ${jobId}`);
         
-        const response = await fetch(`https://api.magichour.ai/v1/ai-headshot-generator/${jobId}`, {
-          method: 'GET',
-          headers: {
-            'Authorization': `Bearer ${this.magicHourApiKey}`,
-            'Content-Type': 'application/json',
-          },
-        });
+        // Try different possible endpoints for checking job status
+        const possibleEndpoints = [
+          `https://api.magichour.ai/v1/jobs/${jobId}`,
+          `https://api.magichour.ai/v1/ai-headshot-generator/jobs/${jobId}`,
+          `https://api.magichour.ai/v1/generations/${jobId}`,
+          `https://api.magichour.ai/v1/ai-headshot-generator/${jobId}/status`,
+          `https://api.magichour.ai/v1/ai-headshot-generator/${jobId}`
+        ];
+        
+        let response = null;
+        let workingEndpoint = null;
+        
+        // Try each endpoint until we find one that works
+        for (const endpoint of possibleEndpoints) {
+          try {
+            console.log(`🔍 Trying endpoint: ${endpoint}`);
+            response = await fetch(endpoint, {
+              method: 'GET',
+              headers: {
+                'Authorization': `Bearer ${this.magicHourApiKey}`,
+                'Content-Type': 'application/json',
+              },
+            });
+            
+            if (response.ok) {
+              workingEndpoint = endpoint;
+              console.log(`✅ Found working endpoint: ${endpoint}`);
+              break;
+            } else {
+              console.log(`❌ Endpoint ${endpoint} returned ${response.status}`);
+            }
+          } catch (error) {
+            console.log(`❌ Endpoint ${endpoint} failed: ${error.message}`);
+          }
+        }
 
-        if (!response.ok) {
-          console.error(`❌ Failed to check job status: ${response.status}`);
+        if (!response || !response.ok) {
+          console.error(`❌ All endpoints failed for job ${jobId}`);
           continue;
         }
+        
+        console.log(`✅ Using endpoint: ${workingEndpoint}`);
 
         const jobStatus = await response.json();
         console.log(`📊 Job ${jobId} full response:`, JSON.stringify(jobStatus, null, 2));
