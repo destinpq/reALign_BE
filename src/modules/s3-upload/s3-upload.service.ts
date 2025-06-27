@@ -37,7 +37,7 @@ export class S3UploadService {
 
       // Upload to S3
       const uploadCommand = new PutObjectCommand({
-        Bucket: process.env.S3_BUCKET_NAME,
+        Bucket: process.env.AWS_S3_BUCKET_NAME,
         Key: fileName,
         Body: imageBuffer,
         ContentType: response.headers['content-type'] || 'image/jpeg',
@@ -47,7 +47,7 @@ export class S3UploadService {
       this.logger.log(`Uploaded to S3: ${fileName}`);
 
       // Return the S3 object URL
-      const s3Url = `https://${process.env.S3_BUCKET_NAME}.s3.${process.env.AWS_REGION}.amazonaws.com/${fileName}`;
+      const s3Url = `https://${process.env.AWS_S3_BUCKET_NAME}.s3.${process.env.AWS_REGION}.amazonaws.com/${fileName}`;
       this.logger.log(`S3 URL: ${s3Url}`);
       
       return s3Url;
@@ -62,7 +62,7 @@ export class S3UploadService {
       this.logger.log(`Uploading buffer to S3: ${fileName}`);
       
       const uploadCommand = new PutObjectCommand({
-        Bucket: process.env.S3_BUCKET_NAME,
+        Bucket: process.env.AWS_S3_BUCKET_NAME,
         Key: fileName,
         Body: imageBuffer,
         ContentType: contentType,
@@ -71,7 +71,7 @@ export class S3UploadService {
       await this.s3Client.send(uploadCommand);
       this.logger.log(`Buffer uploaded to S3: ${fileName}`);
 
-      const s3Url = `https://${process.env.S3_BUCKET_NAME}.s3.${process.env.AWS_REGION}.amazonaws.com/${fileName}`;
+      const s3Url = `https://${process.env.AWS_S3_BUCKET_NAME}.s3.${process.env.AWS_REGION}.amazonaws.com/${fileName}`;
       return s3Url;
     } catch (error) {
       this.logger.error(`Error uploading buffer to S3: ${error.message}`, error.stack);
