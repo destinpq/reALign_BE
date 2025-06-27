@@ -132,9 +132,9 @@ export class MagicHourController {
       const result = await this.magicHourService.handleWebhookCompletion(webhookData);
       
       return {
-        success: true,
-        data: result.data,
-        message: 'Magic Hour webhook processed successfully',
+        success: result.success || true,
+        data: result.data || result,
+        message: result.message || 'Magic Hour webhook processed successfully',
         timestamp: new Date().toISOString(),
       };
     } catch (error) {
