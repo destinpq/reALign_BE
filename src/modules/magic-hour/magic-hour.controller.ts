@@ -16,22 +16,27 @@ export class MagicHourController {
   @ApiResponse({ status: 401, description: 'User not authenticated' })
   @ApiResponse({ status: 500, description: 'Magic Hour API error or server error' })
   async generateDirectProfessionalAvatar(
-    @Body() body: { imageUrl: string; prompt: string; name: string },
+    @Body() body: { imageUrl?: string; image_url?: string; prompt: string; name: string },
     @Request() req,
   ) {
     const userId = req.user.id;
     console.log('🎨 Magic Hour avatar generation requested for user:', userId);
+    
+    // Handle both imageUrl and image_url field names
+    const imageUrl = body.imageUrl || body.image_url;
+    
     console.log('📊 Request data:', {
-      imageUrl: body.imageUrl,
+      imageUrl: imageUrl,
       prompt: body.prompt,
       name: body.name,
-      userId: userId
+      userId: userId,
+      rawBody: body
     });
     
     try {
       const result = await this.magicHourService.generateDirectProfessionalAvatar(
         userId,
-        body.imageUrl,
+        imageUrl,
         body.prompt,
         body.name,
       );

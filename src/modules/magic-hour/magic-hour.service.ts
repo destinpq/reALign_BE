@@ -23,6 +23,11 @@ export class MagicHourService {
     console.log('📸 Image URL:', imageUrl);
     console.log('📝 Prompt:', prompt);
 
+    // Validate inputs
+    if (!imageUrl) {
+      console.log('⚠️ No image URL provided - this will fail at Magic Hour API');
+    }
+
     try {
       // 🔥 CALL MAGIC HOUR API FIRST - Don't let database issues block this!
       console.log('🔥 Calling Magic Hour API to generate NEW avatar...');
@@ -117,7 +122,7 @@ export class MagicHourService {
       // Return error response without trying database
       return {
         id: `error_${Date.now()}`,
-        image_url: imageUrl,
+        image_url: null,
         status: 'FAILED',
         error: `Avatar generation failed: ${error.message}`,
         sessionId: `error_session_${Date.now()}`,
@@ -129,6 +134,11 @@ export class MagicHourService {
   private async callMagicHourAPI(imageUrl: string, prompt: string) {
     if (!this.magicHourApiKey) {
       console.log('⚠️ Magic Hour API key not configured');
+      return null;
+    }
+
+    if (!imageUrl) {
+      console.log('⚠️ No image URL provided for Magic Hour API');
       return null;
     }
 
@@ -216,6 +226,12 @@ export class MagicHourService {
     
     // For now, we'll create a URL that indicates it's a generated variation
     // This ensures the frontend knows it's a new image even if Magic Hour is still processing
+    
+    // Handle case where originalUrl might be undefined
+    if (!originalUrl) {
+      throw new Error('Cannot generate variation: no original image URL provided');
+    }
+    
     const baseUrl = originalUrl.split('?')[0]; // Remove existing query params
     const variationUrl = `${baseUrl}?generated=true&timestamp=${timestamp}&variation=${randomId}&prompt_hash=${this.hashString(prompt)}&magic_hour_fallback=true`;
     
