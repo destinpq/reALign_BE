@@ -120,4 +120,32 @@ export class MagicHourController {
       };
     }
   }
+
+  @Post('webhook')
+  @ApiOperation({ summary: 'Magic Hour webhook endpoint for job completion notifications' })
+  @ApiResponse({ status: 200, description: 'Webhook processed successfully' })
+  @ApiResponse({ status: 400, description: 'Invalid webhook data' })
+  async handleWebhook(@Body() webhookData: any) {
+    try {
+      console.log('🎣 Magic Hour webhook received:', JSON.stringify(webhookData, null, 2));
+      
+      const result = await this.magicHourService.handleWebhookCompletion(webhookData);
+      
+      return {
+        success: true,
+        data: result.data,
+        message: 'Magic Hour webhook processed successfully',
+        timestamp: new Date().toISOString(),
+      };
+    } catch (error) {
+      console.error('❌ Magic Hour webhook processing failed:', error);
+      
+      return {
+        success: false,
+        error: error.message || 'Webhook processing failed',
+        message: 'Failed to process Magic Hour webhook',
+        timestamp: new Date().toISOString(),
+      };
+    }
+  }
 } 

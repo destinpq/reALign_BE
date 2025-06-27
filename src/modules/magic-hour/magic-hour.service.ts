@@ -64,55 +64,22 @@ export class MagicHourService {
       }
 
       console.log('✅ Magic Hour job created successfully:', jobId);
-      console.log('🔄 Polling for completion...');
+      console.log('⚠️  Magic Hour uses webhooks, not polling. Job will complete asynchronously.');
 
-      // Poll for completion (like we tested before!)
-      const result = await this.pollForCompletion(jobId);
-      console.log('🔍 Full Magic Hour result:', JSON.stringify(result, null, 2));
+      // Magic Hour uses webhooks for completion notifications, not polling
+      // For now, return the job ID and let the webhook handle completion
+      // TODO: Implement webhook endpoint to handle Magic Hour completion
       
-      // Magic Hour returns download URLs in the downloads array when job is completed
-      const generatedImageUrl = result?.downloads?.[0]?.url;
-      
-      if (!generatedImageUrl) {
-        console.error('❌ No image URL found in Magic Hour response:', result);
-        throw new HttpException('Image generation failed - no image URL returned', HttpStatus.INTERNAL_SERVER_ERROR);
-      }
-      
-      console.log('✅ Got image URL from Magic Hour:', generatedImageUrl);
-      
-      // Download and upload to S3 (like we tested!)
-      console.log('🔽 Downloading image from Magic Hour URL:', generatedImageUrl);
-      
-      if (!generatedImageUrl || !generatedImageUrl.startsWith('http')) {
-        throw new HttpException('Invalid image URL from Magic Hour', HttpStatus.INTERNAL_SERVER_ERROR);
-      }
-      
-      const imageResponse = await firstValueFrom(
-        this.httpService.get(generatedImageUrl, { responseType: 'arraybuffer' })
-      );
-
-      const buffer = Buffer.from(imageResponse.data);
-      const fileName = `${Date.now()}.png`;
-      const s3Key = `headshots/${fileName}`;
-
-      const uploadResult = await this.s3UploadService.uploadBufferToS3(
-        buffer,
-        s3Key,
-        'image/png'
-      );
-
-      console.log('✅ Uploaded to S3:', uploadResult);
-
       return {
         success: true,
         data: {
           prompt: "professional, business attire, good posture",
-          s3Url: uploadResult,
-          httpsUrl: uploadResult,
-          fileName,
-          s3Key,
+          jobId: jobId,
+          status: 'processing',
+          message: 'Magic Hour job created successfully. Processing will complete asynchronously via webhook.',
           originalImageUrl: imageUrl,
-          jobId: jobId
+          // Note: Magic Hour uses webhooks for completion, not polling
+          // The actual image URL will be available when the webhook is called
         }
       };
 
@@ -128,66 +95,64 @@ export class MagicHourService {
     }
   }
 
-  
-  private async pollForCompletion(jobId: string, maxAttempts = 30): Promise<any> {
-    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-      try {
-        console.log(`🔄 Polling attempt ${attempt} for job: ${jobId}`);
+  // Webhook handler for Magic Hour completion notifications
+  async handleWebhookCompletion(webhookData: any): Promise<any> {
+    try {
+      console.log('🎣 Magic Hour webhook received:', JSON.stringify(webhookData, null, 2));
+      
+      const { type, payload } = webhookData;
+      
+      if (type === 'image.completed' && payload?.status === 'complete') {
+        const jobId = payload.id;
+        const downloadUrl = payload.downloads?.[0]?.url;
         
-        // Try different polling endpoints that might work
-        const possibleEndpoints = [
-          `https://api.magichour.ai/v1/ai-headshot-generator/${jobId}`,
-          `https://api.magichour.ai/v1/jobs/${jobId}`,
-          `https://api.magichour.ai/v1/ai-headshot-generator/jobs/${jobId}`
-        ];
+        if (!downloadUrl) {
+          console.error('❌ No download URL in Magic Hour webhook:', payload);
+          return { success: false, error: 'No download URL provided' };
+        }
+        
+        console.log('✅ Magic Hour job completed:', jobId);
+        console.log('🔽 Downloading image from:', downloadUrl);
+        
+        // Download the image and upload to S3
+        const imageResponse = await firstValueFrom(
+          this.httpService.get(downloadUrl, { responseType: 'arraybuffer' })
+        );
 
-        let response;
-        let lastError;
+        const buffer = Buffer.from(imageResponse.data);
+        const fileName = `${Date.now()}.png`;
+        const s3Key = `headshots/${fileName}`;
 
-        for (const endpoint of possibleEndpoints) {
-          try {
-            response = await firstValueFrom(
-              this.httpService.get(endpoint, {
-                headers: {
-                  'Authorization': `Bearer ${this.magicHourApiKey}`,
-                },
-              })
-            );
-            console.log(`✅ Successfully polled endpoint: ${endpoint}`);
-            break;
-          } catch (endpointError) {
-            console.log(`❌ Failed to poll ${endpoint}:`, endpointError.response?.status);
-            lastError = endpointError;
-            continue;
+        const uploadResult = await this.s3UploadService.uploadBufferToS3(
+          buffer,
+          s3Key,
+          'image/png'
+        );
+
+        console.log('✅ Uploaded to S3:', uploadResult);
+
+        // TODO: Store the result in database with jobId as reference
+        // so the frontend can retrieve it later
+        
+        return {
+          success: true,
+          data: {
+            jobId: jobId,
+            s3Url: uploadResult,
+            httpsUrl: uploadResult,
+            fileName,
+            s3Key,
+            status: 'completed'
           }
-        }
-
-        if (!response) {
-          throw lastError || new Error('All polling endpoints failed');
-        }
-
-        console.log(`📊 Job status:`, response.data?.status);
-        console.log(`📊 Full response:`, JSON.stringify(response.data, null, 2));
-
-        if (response.data.status === 'completed' && response.data.downloads?.length > 0) {
-          console.log('🎉 Job completed successfully!');
-          return response.data;
-        }
-
-        if (response.data.status === 'failed') {
-          throw new Error('Magic Hour job failed');
-        }
-
-        await new Promise(resolve => setTimeout(resolve, 2000));
-      } catch (error) {
-        console.log(`❌ Polling attempt ${attempt} failed:`, error.message);
-        if (attempt === maxAttempts) {
-          throw error;
-        }
-        await new Promise(resolve => setTimeout(resolve, 2000));
+        };
       }
+      
+      return { success: true, message: 'Webhook processed' };
+      
+    } catch (error) {
+      console.error('❌ Error processing Magic Hour webhook:', error);
+      return { success: false, error: error.message };
     }
-
-    throw new Error('Magic Hour job timed out');
   }
+
 } 
