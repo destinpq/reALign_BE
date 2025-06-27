@@ -20,42 +20,48 @@ export class MagicHourService {
     }
   }
 
-  async generateAndUploadImage(prompt: string): Promise<any> {
+  async generateAndUploadImage(prompt: string, imageUrl: string): Promise<any> {
     try {
-      const enhancedPrompt = `professional headshot portrait, ${prompt}, high-quality photography, studio lighting, business attire, clean background, professional headshot style`;
-      
-      // Use the correct Magic Hour AI headshot generator endpoint
+      if (!imageUrl) {
+        throw new HttpException('Image URL is required', HttpStatus.BAD_REQUEST);
+      }
+
+      // EXACT format as specified
+      const requestBody = {
+        name: `Ai Headshot - ${new Date().toISOString()}`,
+        style: {
+          prompt: "professional, business attire, good posture"
+        },
+        assets: {
+          image_file_path: imageUrl
+        }
+      };
+
+      console.log('🚀 Magic Hour Request Body:', JSON.stringify(requestBody, null, 2));
+
       const response = await firstValueFrom(
         this.httpService.post(
           `${this.magicHourBaseUrl}/v1/ai-headshot-generator`,
-          {
-            name: "AI Headshot image",
-            style: {
-              prompt: enhancedPrompt
-            },
-            assets: {
-              image_file_path: "api-assets/id/default.png" // Default placeholder
-            }
-          },
+          requestBody,
           {
             headers: {
               'Authorization': `Bearer ${this.magicHourApiKey}`,
               'Content-Type': 'application/json',
             },
-            timeout: 60000, // 60 second timeout
+            timeout: 60000,
           }
         )
       );
 
-      const imageUrl = response.data?.image_url || response.data?.url || response.data?.downloads?.[0]?.url;
+      const generatedImageUrl = response.data?.image_url || response.data?.url || response.data?.downloads?.[0]?.url;
       
-      if (!imageUrl) {
+      if (!generatedImageUrl) {
         throw new HttpException('Image generation failed - no image URL returned', HttpStatus.INTERNAL_SERVER_ERROR);
       }
       
       // Download and upload to S3
       const imageResponse = await firstValueFrom(
-        this.httpService.get(imageUrl, { responseType: 'arraybuffer' })
+        this.httpService.get(generatedImageUrl, { responseType: 'arraybuffer' })
       );
 
       const buffer = Buffer.from(imageResponse.data);
@@ -71,15 +77,20 @@ export class MagicHourService {
       return {
         success: true,
         data: {
-          prompt: enhancedPrompt,
+          prompt: `professional, business attire, good posture, ${prompt}`,
           s3Url: uploadResult,
           httpsUrl: uploadResult,
           fileName,
           s3Key,
+          originalImageUrl: imageUrl,
         }
       };
 
     } catch (error) {
+      // Log the actual error response for debugging
+      if (error.response?.data) {
+        console.error('Magic Hour API Error Response:', error.response.data);
+      }
       throw new HttpException(
         `Headshot generation failed: ${error.message}`,
         HttpStatus.INTERNAL_SERVER_ERROR

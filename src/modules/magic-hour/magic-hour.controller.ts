@@ -16,21 +16,17 @@ export class MagicHourController {
   @ApiResponse({ status: 401, description: 'User not authenticated' })
   @ApiResponse({ status: 500, description: 'Magic Hour API error or server error' })
   async generateAndUploadHeadshot(
-    @Body() body: { prompt: string },
+    @Body() body: { prompt: string; imageUrl: string },
     @Request() req,
   ) {
     const userId = req.user.id;
     
     try {
-      const s3Url = await this.magicHourService.generateAndUploadImage(body.prompt);
+      const result = await this.magicHourService.generateAndUploadImage(body.prompt, body.imageUrl);
       
       return {
         success: true,
-        data: {
-          s3Url,
-          httpsUrl: s3Url.replace('s3://', 'https://').replace(`${process.env.AWS_S3_BUCKET_NAME || 'realign'}/`, `${process.env.AWS_S3_BUCKET_NAME || 'realign'}.s3.amazonaws.com/`),
-          prompt: body.prompt,
-        },
+        data: result.data,
         message: 'AI headshot generated and uploaded to S3 successfully',
         timestamp: new Date().toISOString(),
       };
@@ -62,12 +58,21 @@ export class MagicHourController {
     // Handle both imageUrl and image_url field names
     const imageUrl = body.imageUrl || body.image_url;
     
+    if (!imageUrl) {
+      return {
+        success: false,
+        error: 'Image URL is required',
+        message: 'Please provide an image URL',
+        timestamp: new Date().toISOString(),
+      };
+    }
+    
     try {
-      const result = await this.magicHourService.generateAndUploadImage(body.prompt);
+      const result = await this.magicHourService.generateAndUploadImage(body.prompt, imageUrl);
       
       return {
         success: true,
-        data: result,
+        data: result.data,
         message: 'Professional avatar generated successfully using Magic Hour AI',
         timestamp: new Date().toISOString(),
       };
