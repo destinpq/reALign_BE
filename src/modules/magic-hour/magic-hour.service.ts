@@ -145,6 +145,7 @@ export class MagicHourService {
     try {
       console.log('🔗 Calling REAL Magic Hour API endpoint...');
       console.log('🔑 Using API key:', this.magicHourApiKey.substring(0, 10) + '...');
+      console.log('🔑 Full API key length:', this.magicHourApiKey?.length || 'UNDEFINED');
       
       const currentDateTime = new Date().toISOString().replace(/[:.]/g, '-');
       const requestBody = {
@@ -157,15 +158,21 @@ export class MagicHourService {
         }
       };
       
+      const headers = {
+        'Authorization': `Bearer ${this.magicHourApiKey}`,
+        'Content-Type': 'application/json',
+      };
+      
       console.log('📤 Request body:', JSON.stringify(requestBody, null, 2));
+      console.log('📋 Request headers:', JSON.stringify({
+        'Authorization': `Bearer ${this.magicHourApiKey.substring(0, 15)}...`,
+        'Content-Type': headers['Content-Type']
+      }, null, 2));
       
       // Step 1: Submit the job
       const response = await fetch('https://api.magichour.ai/v1/ai-headshot-generator', {
         method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${this.magicHourApiKey}`,
-          'Content-Type': 'application/json',
-        },
+        headers: headers,
         body: JSON.stringify(requestBody),
       });
 
@@ -255,13 +262,30 @@ export class MagicHourService {
         }
 
         const jobStatus = await response.json();
-        console.log(`📊 Job ${jobId} status:`, jobStatus.status);
+        console.log(`📊 Job ${jobId} full response:`, JSON.stringify(jobStatus, null, 2));
 
-        if (jobStatus.status === 'completed' && jobStatus.result?.output_url) {
-          console.log('✅ Job completed with image URL:', jobStatus.result.output_url);
-          return jobStatus.result.output_url;
-        } else if (jobStatus.status === 'failed') {
-          console.error('❌ Magic Hour job failed:', jobStatus.error);
+        // Check multiple possible fields for the actual image URL
+        let actualImageUrl = null;
+        
+        if (jobStatus.status === 'completed' || jobStatus.status === 'success') {
+          // Try different possible fields where Magic Hour might return the actual image URL
+          actualImageUrl = jobStatus.result?.output_url || 
+                          jobStatus.result?.image_url ||
+                          jobStatus.output_url ||
+                          jobStatus.image_url ||
+                          jobStatus.result?.url ||
+                          jobStatus.url ||
+                          jobStatus.result?.file_url ||
+                          jobStatus.file_url;
+          
+          if (actualImageUrl) {
+            console.log('✅ Job completed with image URL:', actualImageUrl);
+            return actualImageUrl;
+          } else {
+            console.log('⚠️ Job completed but no direct image URL found, full response:', JSON.stringify(jobStatus, null, 2));
+          }
+        } else if (jobStatus.status === 'failed' || jobStatus.status === 'error') {
+          console.error('❌ Magic Hour job failed:', jobStatus.error || jobStatus);
           return null;
         }
 
