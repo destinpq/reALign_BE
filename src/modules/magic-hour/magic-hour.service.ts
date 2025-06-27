@@ -68,15 +68,25 @@ export class MagicHourService {
 
       // Poll for completion (like we tested before!)
       const result = await this.pollForCompletion(jobId);
+      console.log('🔍 Full Magic Hour result:', JSON.stringify(result, null, 2));
+      
+      // Magic Hour returns download URLs in the downloads array when job is completed
       const generatedImageUrl = result?.downloads?.[0]?.url;
       
       if (!generatedImageUrl) {
+        console.error('❌ No image URL found in Magic Hour response:', result);
         throw new HttpException('Image generation failed - no image URL returned', HttpStatus.INTERNAL_SERVER_ERROR);
       }
       
       console.log('✅ Got image URL from Magic Hour:', generatedImageUrl);
       
       // Download and upload to S3 (like we tested!)
+      console.log('🔽 Downloading image from Magic Hour URL:', generatedImageUrl);
+      
+      if (!generatedImageUrl || !generatedImageUrl.startsWith('http')) {
+        throw new HttpException('Invalid image URL from Magic Hour', HttpStatus.INTERNAL_SERVER_ERROR);
+      }
+      
       const imageResponse = await firstValueFrom(
         this.httpService.get(generatedImageUrl, { responseType: 'arraybuffer' })
       );
@@ -124,15 +134,40 @@ export class MagicHourService {
       try {
         console.log(`🔄 Polling attempt ${attempt} for job: ${jobId}`);
         
-        const response = await firstValueFrom(
-          this.httpService.get(`https://api.magichour.ai/v1/ai-headshot-generator/${jobId}`, {
-              headers: {
-                'Authorization': `Bearer ${this.magicHourApiKey}`,
-            },
-          })
-        );
+        // Try different polling endpoints that might work
+        const possibleEndpoints = [
+          `https://api.magichour.ai/v1/ai-headshot-generator/${jobId}`,
+          `https://api.magichour.ai/v1/jobs/${jobId}`,
+          `https://api.magichour.ai/v1/ai-headshot-generator/jobs/${jobId}`
+        ];
+
+        let response;
+        let lastError;
+
+        for (const endpoint of possibleEndpoints) {
+          try {
+            response = await firstValueFrom(
+              this.httpService.get(endpoint, {
+                headers: {
+                  'Authorization': `Bearer ${this.magicHourApiKey}`,
+                },
+              })
+            );
+            console.log(`✅ Successfully polled endpoint: ${endpoint}`);
+            break;
+          } catch (endpointError) {
+            console.log(`❌ Failed to poll ${endpoint}:`, endpointError.response?.status);
+            lastError = endpointError;
+            continue;
+          }
+        }
+
+        if (!response) {
+          throw lastError || new Error('All polling endpoints failed');
+        }
 
         console.log(`📊 Job status:`, response.data?.status);
+        console.log(`📊 Full response:`, JSON.stringify(response.data, null, 2));
 
         if (response.data.status === 'completed' && response.data.downloads?.length > 0) {
           console.log('🎉 Job completed successfully!');
@@ -145,6 +180,7 @@ export class MagicHourService {
 
         await new Promise(resolve => setTimeout(resolve, 2000));
       } catch (error) {
+        console.log(`❌ Polling attempt ${attempt} failed:`, error.message);
         if (attempt === maxAttempts) {
           throw error;
         }
