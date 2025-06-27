@@ -1,7 +1,7 @@
 import { Controller, Get, Post, Body, Query, Logger } from '@nestjs/common';
 import { S3UploadService } from './s3-upload.service';
 
-@Controller('api/v1/s3-upload')
+@Controller('s3-upload')
 export class S3UploadController {
   private readonly logger = new Logger(S3UploadController.name);
 
